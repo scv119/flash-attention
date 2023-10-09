@@ -1046,6 +1046,7 @@ def flash_attn_with_page_attention(
     q,
     k_cache,
     v_cache,
+    block_tables,
     k=None,
     v=None,
     rotary_cos=None,
@@ -1102,8 +1103,9 @@ def flash_attn_with_page_attention(
 
     Arguments:
         q: (batch_size, seqlen, nheads, headdim)
-        k_cache: (batch_size_cache, seqlen_cache, nheads_k, headdim)
-        v_cache: (batch_size_cache, seqlen_cache, nheads_k, headdim)
+        k_cache: (num_blocks, block_size, num_heads, head_size)
+        v_cache: (num_blocks, block_size, num_heads, head_size)
+        block_tables: (batch_size, max_num_blocks), stores the block ids for each sequence in the batch.
         k [optional]: (batch_size, seqlen_new, nheads_k, headdim). If not None, we concatenate
             k with k_cache, starting at the indices specified by cache_seqlens.
         v [optional]: (batch_size, seqlen_new, nheads_k, headdim). Similar to k.
@@ -1132,8 +1134,8 @@ def flash_attn_with_page_attention(
     Return:
         out: (batch_size, seqlen, nheads, headdim).
     """
-    assert k_cache.stride(-1) == 1, "k_cache must have contiguous last dimension"
-    assert v_cache.stride(-1) == 1, "v_cache must have contiguous last dimension"
+    #assert k_cache.stride(-1) == 1, "k_cache must have contiguous last dimension"
+    #assert v_cache.stride(-1) == 1, "v_cache must have contiguous last dimension"
     maybe_contiguous = lambda x: x.contiguous() if x is not None and x.stride(-1) != 1 else x
     q, k, v = [maybe_contiguous(x) for x in (q, k, v)]
     if softmax_scale is None:
@@ -1144,10 +1146,11 @@ def flash_attn_with_page_attention(
         )
         cache_seqlens = maybe_contiguous(cache_seqlens)
     cache_batch_idx = maybe_contiguous(cache_batch_idx)
-    out, softmax_lse = flash_attn_cuda.fwd_kvcache(
+    out, softmax_lse = flash_attn_cuda.fwd_page_attention(
         q,
         k_cache,
         v_cache,
+        block_tables,
         k,
         v,
         cache_seqlens,

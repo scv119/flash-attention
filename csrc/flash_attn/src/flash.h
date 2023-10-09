@@ -127,6 +127,9 @@ struct Flash_fwd_params : public Qkv_params {
     bool is_rotary_interleaved;
 
     int num_splits;  // For split-KV version
+
+    // The page attention block_table.
+    int * __restrict__ cu_pg_attn_block_tables_ptr;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

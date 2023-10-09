@@ -39,6 +39,8 @@ struct BlockInfo {
     // We have to have seqlen_k_cache declared before actual_seqlen_k, otherwise actual_seqlen_k is set to 0.
     const int seqlen_k_cache;
     const int actual_seqlen_k;
+    //
+    const int* __restrict__ cu_seqlens_q;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
