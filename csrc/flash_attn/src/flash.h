@@ -131,7 +131,7 @@ struct Flash_fwd_params : public Qkv_params {
     // The page attention block_table.
     int *__restrict__ cu_pg_attn_block_tables_ptr;
     index_t pg_attn_block_tables_batch_stride;
-    index_t pg_attn_block_size;
+    index_t pg_attn_cache_block_stride;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
