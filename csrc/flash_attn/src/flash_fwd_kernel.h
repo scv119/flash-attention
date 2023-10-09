@@ -669,10 +669,15 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
         + m_block * kBlockM * params.q_row_stride + bidh * params.q_head_stride;
     // We move K and V to the last block.
     const int bidb_cache = params.cache_batch_idx == nullptr ? bidb : params.cache_batch_idx[bidb];
-    const index_t row_offset_k = binfo.k_offset(params.k_batch_stride, params.k_row_stride, bidb_cache)
-        + (n_block_max - 1) * kBlockN * params.k_row_stride + (bidh / params.h_h_k_ratio) * params.k_head_stride;
-    const index_t row_offset_v = binfo.k_offset(params.v_batch_stride, params.v_row_stride, bidb_cache)
-        + (n_block_max - 1) * kBlockN * params.v_row_stride + (bidh / params.h_h_k_ratio) * params.v_head_stride;
+
+    // const index_t row_offset_k = binfo.k_offset(params.k_batch_stride, params.k_row_stride, bidb_cache)
+    //     + (n_block_max - 1) * kBlockN * params.k_row_stride + (bidh / params.h_h_k_ratio) * params.k_head_stride;
+    // const index_t row_offset_v = binfo.k_offset(params.v_batch_stride, params.v_row_stride, bidb_cache)
+    //     + (n_block_max - 1) * kBlockN * params.v_row_stride + (bidh / params.h_h_k_ratio) * params.v_head_stride;
+    const index_t row_offset_k = binfo.k_offset_pg(params.k_batch_stride, params.k_row_stride, bidb_cache, n_block_max - 1, kBlockN)
+        + (bidh / params.h_h_k_ratio) * params.k_head_stride;
+    const index_t row_offset_v = binfo.k_offset_pg(params.v_batch_stride, params.v_row_stride, bidb_cache, n_block_max - 1, kBlockN)
+        + (bidh / params.h_h_k_ratio) * params.v_head_stride;
 
     Tensor gQ = make_tensor(make_gmem_ptr(reinterpret_cast<Element *>(params.q_ptr) + row_offset_q),
                             Shape<Int<kBlockM>, Int<kHeadDim>>{},
@@ -923,7 +928,8 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
 
         // Advance gV
         if (masking_step > 0) {
-            tVgV.data() = tVgV.data() + (-int(kBlockN * params.v_row_stride));
+            // tVgV.data() = tVgV.data() + (-int(kBlockN * params.v_row_stride));
+            tVgV.data() = tVgV.data() + binfo.k_advnce_offset_pg(bidb_cache, n_block, params.v_row_stride, kBlockN);
             flash::copy</*Is_even_MN=*/true, Is_even_K>(gmem_tiled_copy_QKV, tVgV, tVsV, tKVcKV, tKVpKV);
         } else {
             // Clear the smem tiles to account for predicated off loads
@@ -962,7 +968,8 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
 
         if (n_block > n_block_min) {
             // Advance gK
-            tKgK.data() = tKgK.data() + (-int(kBlockN * params.k_row_stride));
+            // tKgK.data() = tKgK.data() + (-int(kBlockN * params.k_row_stride));
+            tKgK.data() = tKgK.data() + binfo.k_advnce_offset_pg(bidb_cache, n_block, params.k_row_stride, kBlockN);
             flash::copy</*Is_even_MN=*/true, Is_even_K>(gmem_tiled_copy_QKV, tKgK, tKsK, tKVcKV, tKVpKV);
             // This cp_async_fence needs to be in the if block, otherwise the synchronization
             // isn't right and we get race conditions.
@@ -998,7 +1005,8 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
         flash::cp_async_wait<0>();
         __syncthreads();
         // Advance gV
-        tVgV.data() = tVgV.data() + (-int(kBlockN * params.v_row_stride));
+        // tVgV.data() = tVgV.data() + (-int(kBlockN * params.v_row_stride));
+        tVgV.data() = tVgV.data() + binfo.k_advnce_offset_pg(bidb_cache, n_block, params.v_row_stride, kBlockN);
         flash::copy</*Is_even_MN=*/true, Is_even_K>(gmem_tiled_copy_QKV, tVgV, tVsV, tKVcKV, tKVpKV);
         cute::cp_async_fence();
 
@@ -1011,7 +1019,8 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
         __syncthreads();
         if (n_block > n_block_min) {
             // Advance gK
-            tKgK.data() = tKgK.data() + (-int(kBlockN * params.k_row_stride));
+            // tKgK.data() = tKgK.data() + (-int(kBlockN * params.k_row_stride));
+            tKgK.data() = tKgK.data() + binfo.k_advnce_offset_pg(bidb_cache, n_block, params.k_row_stride, kBlockN);
             flash::copy</*Is_even_MN=*/true, Is_even_K>(gmem_tiled_copy_QKV, tKgK, tKsK, tKVcKV, tKVpKV);
             // This cp_async_fence needs to be in the if block, otherwise the synchronization
             // isn't right and we get race conditions.

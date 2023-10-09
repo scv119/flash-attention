@@ -1406,6 +1406,8 @@ mha_fwd_pgcache(at::Tensor &q,                 // batch_size x seqlen_q x num_he
 
     // set block_tables_ptr
     params.cu_pg_attn_block_tables_ptr = static_cast<int *>(block_tables.data_ptr());
+    params.pg_attn_block_tables_batch_stride = block_tables.stride(0);
+    params.pg_attn_cache_block_stride = kcache.stride(0);
 
     at::Tensor k, v, k_padded, v_padded;
     if (k_.has_value()) {

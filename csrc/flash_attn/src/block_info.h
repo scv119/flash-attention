@@ -20,6 +20,9 @@ struct BlockInfo {
         // Otherwise it's cu_seqlens_k[bidb], i.e., we use cu_seqlens_k to store the sequence lengths of K.
         , seqlen_k_cache(!Varlen || params.cu_seqlens_k == nullptr ? params.seqlen_k : (params.is_seqlens_k_cumulative ? params.cu_seqlens_k[bidb + 1] - sum_s_k : params.cu_seqlens_k[bidb]))
         , actual_seqlen_k(seqlen_k_cache + (params.knew_ptr == nullptr ? 0 : params.seqlen_knew))
+        , cu_pg_attn_block_tables_ptr(params.cu_pg_attn_block_tables_ptr)
+        , pg_attn_block_batch_stride(params.pg_attn_block_tables_batch_stride)
+        , pg_attn_cache_block_stride(params.pg_attn_cache_block_stride)
         {
         }
 
@@ -33,14 +36,33 @@ struct BlockInfo {
         return sum_s_k == -1 ? bidb * batch_stride : uint32_t(sum_s_k) * row_stride;
     }
 
+    template <typename index_t>
+    inline __device__ index_t k_offset_pg(const index_t batch_stride, const index_t row_stride, const int bidb, const int block_id, const int k_block_n) const {
+        if (cu_pg_attn_block_tables_ptr == nullptr) {
+            return k_offset(batch_stride, row_stride, bidb) + block_id * k_block_n * row_stride;
+        }
+        return cu_pg_attn_block_tables_ptr[bidb * pg_attn_block_batch_stride + block_id] * pg_attn_cache_block_stride;
+    }
+
+    template <typename index_t>
+    inline __device__ index_t k_advance_offset_pg(const int bidb, const index_t current_block_id, const index_t row_stride, const int k_block_n) const {
+        if (cu_pg_attn_block_tables_ptr == nullptr) {
+            return -int(k_block_n * k_row_stride);
+        }
+        return cu_pg_attn_block_tables_ptr[bidb * pg_attn_block_batch_stride + current_block_id - 1] * pg_attn_cache_block_stride - 
+            cu_pg_attn_block_tables_ptr[bidb * pg_attn_block_batch_stride + current_block_id] * pg_attn_cache_block_stride;
+    }
+
     const int sum_s_q;
     const int sum_s_k;
     const int actual_seqlen_q;
     // We have to have seqlen_k_cache declared before actual_seqlen_k, otherwise actual_seqlen_k is set to 0.
     const int seqlen_k_cache;
     const int actual_seqlen_k;
-    //
-    const int* __restrict__ cu_seqlens_q;
+    // Store the block offset for each block.
+    const int* __restrict__ cu_pg_attn_block_tables_ptr;
+    const int pg_attn_block_batch_stride;
+    const int pg_attn_cache_block_stride;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
