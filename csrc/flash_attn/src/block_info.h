@@ -45,9 +45,9 @@ struct BlockInfo {
     }
 
     template <typename index_t>
-    inline __device__ index_t k_advance_offset_pg(const int bidb, const index_t current_block_id, const index_t row_stride, const int k_block_n) const {
+    inline __device__ index_t k_advance_offset_pg(const int bidb, const int current_block_id, const index_t row_stride, const int k_block_n) const {
         if (cu_pg_attn_block_tables_ptr == nullptr) {
-            return -int(k_block_n * k_row_stride);
+            return -int(k_block_n * row_stride);
         }
         return cu_pg_attn_block_tables_ptr[bidb * pg_attn_block_batch_stride + current_block_id - 1] * pg_attn_cache_block_stride - 
             cu_pg_attn_block_tables_ptr[bidb * pg_attn_block_batch_stride + current_block_id] * pg_attn_cache_block_stride;
