@@ -676,8 +676,14 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
     //     + (n_block_max - 1) * kBlockN * params.v_row_stride + (bidh / params.h_h_k_ratio) * params.v_head_stride;
     const index_t row_offset_k = binfo.k_offset_pg(params.k_batch_stride, params.k_row_stride, bidb_cache, n_block_max - 1, kBlockN)
         + (bidh / params.h_h_k_ratio) * params.k_head_stride;
+
     const index_t row_offset_v = binfo.k_offset_pg(params.v_batch_stride, params.v_row_stride, bidb_cache, n_block_max - 1, kBlockN)
         + (bidh / params.h_h_k_ratio) * params.v_head_stride;
+
+    assert(row_offset_k == binfo.k_offset(params.k_batch_stride, params.k_row_stride, bidb_cache)
+         + (n_block_max - 1) * kBlockN * params.k_row_stride + (bidh / params.h_h_k_ratio) * params.k_head_stride);
+    assert(row_offset_v == binfo.k_offset(params.v_batch_stride, params.v_row_stride, bidb_cache)
+         + (n_block_max - 1) * kBlockN * params.v_row_stride + (bidh / params.h_h_k_ratio) * params.v_head_stride);
 
     Tensor gQ = make_tensor(make_gmem_ptr(reinterpret_cast<Element *>(params.q_ptr) + row_offset_q),
                             Shape<Int<kBlockM>, Int<kHeadDim>>{},

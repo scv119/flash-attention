@@ -129,7 +129,7 @@ struct Flash_fwd_params : public Qkv_params {
     int num_splits;  // For split-KV version
 
     // The page attention block_table.
-    int *__restrict__ cu_pg_attn_block_tables_ptr;
+    int *__restrict__ cu_pg_attn_block_tables_ptr = nullptr;
     index_t pg_attn_block_tables_batch_stride;
     index_t pg_attn_cache_block_stride;
 };
