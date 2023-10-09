@@ -568,7 +568,7 @@ def get_dropout_fraction(
 #         (128, 128),
 #     ],
 # )
-@pytest.mark.parametrize('seqlen_q,seqlen_k', [(256, 128)])
+@pytest.mark.parametrize('seqlen_q,seqlen_k', [(256, 256)])
 def test_flash_attn_page(
     seqlen_q,
     seqlen_k,
@@ -606,11 +606,13 @@ def test_flash_attn_page(
         v = torch.randn(batch_size, seqlen_new, nheads_k, d, device=device, dtype=dtype)
     else:
         k, v = None, None
-    k_cache = torch.randn(batch_size_cache, seqlen_k, nheads_k, d, device=device, dtype=dtype)
-    v_cache = torch.randn(batch_size_cache, seqlen_k, nheads_k, d, device=device, dtype=dtype)
-    block_tables = torch.zeros(batch_size, 1, device=device, dtype=dtype)
+    k_cache = torch.randn(batch_size_cache * 2, 128, nheads_k, d, device=device, dtype=dtype)
+    v_cache = torch.randn(batch_size_cache * 2, 128, nheads_k, d, device=device, dtype=dtype)
+    block_tables = torch.zeros(batch_size, 2, device=device, dtype=torch.int32)
     block_tables[0][0] = 0
-    block_tables[1][0] = 1
+    block_tables[0][1] = 1
+    block_tables[1][0] = 2
+    block_tables[1][0] = 3
     cache_seqlens = torch.randint(
         0,
         # If we don't use seqlen_q in the case of causal and rotary, cos/sin won't be long enough
@@ -656,6 +658,10 @@ def test_flash_attn_page(
     # k_cache[:, 64:] = -1
     k_cache_ref = (k_cache if not has_batch_idx else k_cache[cache_batch_idx]).clone()
     v_cache_ref = (v_cache if not has_batch_idx else v_cache[cache_batch_idx]).clone()
+
+    k_cache_ref = k_cache_ref.view(batch_size_cache, 2 * 128, nheads_k, d)
+    v_cache_ref = v_cache_ref.view(batch_size_cache, 2 * 128, nheads_k, d)
+
     arange = rearrange(torch.arange(seqlen_k, device=device), "s -> 1 s")
     cache_seqlens_expanded = rearrange(cache_seqlens, "b -> b 1")
     if new_kv:
@@ -664,6 +670,8 @@ def test_flash_attn_page(
         )
         k_cache_ref[update_mask] = rearrange(k_ro, "b s ... -> (b s) ...")
         v_cache_ref[update_mask] = rearrange(v, "b s ... -> (b s) ...")
+    # k_cache_rep = repeat(k_cache_ref, "b s h d -> b s (h g) d", g=nheads // nheads_k)
+    # v_cache_rep = repeat(v_cache_ref, "b s h d -> b s (h g) d", g=nheads // nheads_k)
     k_cache_rep = repeat(k_cache_ref, "b s h d -> b s (h g) d", g=nheads // nheads_k)
     v_cache_rep = repeat(v_cache_ref, "b s h d -> b s (h g) d", g=nheads // nheads_k)
     out = flash_attn_with_page_attention(

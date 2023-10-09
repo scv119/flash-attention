@@ -41,6 +41,8 @@ struct BlockInfo {
         if (cu_pg_attn_block_tables_ptr == nullptr) {
             return k_offset(batch_stride, row_stride, bidb) + block_id * k_block_n * row_stride;
         }
+        assert(block_id == 0);
+        assert(0);
         return cu_pg_attn_block_tables_ptr[bidb * pg_attn_block_batch_stride + block_id] * pg_attn_cache_block_stride;
     }
 
