@@ -906,6 +906,8 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
     }
 
     int n_block = n_block_max - 1;
+    int k_block_idx = n_block;
+    int v_block_idx = n_block;
     // We don't need to clear the sK smem tiles since we'll mask out the scores anyway.
     flash::copy<Is_even_MN, Is_even_K>(gmem_tiled_copy_QKV, tKgK, tKsK, tKVcKV, tKVpKV,
                                        binfo.actual_seqlen_k - n_block * kBlockN);
@@ -939,7 +941,11 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
         // Advance gV
         if (masking_step > 0) {
             // tVgV.data() = tVgV.data() + (-int(kBlockN * params.v_row_stride));
-            tVgV.data() = tVgV.data() + binfo.k_advance_offset_pg(bidb_cache, n_block, params.v_row_stride, kBlockN);
+            if (cute::thread0()) {
+                print("advancing tVgV in masking step");
+            }
+            tVgV.data() = tVgV.data() + binfo.k_advance_offset_pg(bidb_cache, v_block_idx, params.v_row_stride, kBlockN);
+            v_block_idx --;
             flash::copy</*Is_even_MN=*/true, Is_even_K>(gmem_tiled_copy_QKV, tVgV, tVsV, tKVcKV, tKVpKV);
         } else {
             // Clear the smem tiles to account for predicated off loads
@@ -979,7 +985,11 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
         if (n_block > n_block_min) {
             // Advance gK
             // tKgK.data() = tKgK.data() + (-int(kBlockN * params.k_row_stride));
-            tKgK.data() = tKgK.data() + binfo.k_advance_offset_pg(bidb_cache, n_block, params.k_row_stride, kBlockN);
+            if (cute::thread0()) {
+                print("advancing tKgK in masking step");
+            }
+            tKgK.data() = tKgK.data() + binfo.k_advance_offset_pg(bidb_cache, k_block_idx, params.k_row_stride, kBlockN);
+            k_block_idx--;
             flash::copy</*Is_even_MN=*/true, Is_even_K>(gmem_tiled_copy_QKV, tKgK, tKsK, tKVcKV, tKVpKV);
             // This cp_async_fence needs to be in the if block, otherwise the synchronization
             // isn't right and we get race conditions.
@@ -1018,7 +1028,11 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
         __syncthreads();
         // Advance gV
         // tVgV.data() = tVgV.data() + (-int(kBlockN * params.v_row_stride));
-        tVgV.data() = tVgV.data() + binfo.k_advance_offset_pg(bidb_cache, n_block, params.v_row_stride, kBlockN);
+        if (cute::thread0()) {
+            print("advancing tVgV in non-masking step");
+        }
+        tVgV.data() = tVgV.data() + binfo.k_advance_offset_pg(bidb_cache, v_block_idx, params.v_row_stride, kBlockN);
+        v_block_idx--;
         flash::copy</*Is_even_MN=*/true, Is_even_K>(gmem_tiled_copy_QKV, tVgV, tVsV, tKVcKV, tKVpKV);
         cute::cp_async_fence();
 
@@ -1032,7 +1046,11 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
         if (n_block > n_block_min) {
             // Advance gK
             // tKgK.data() = tKgK.data() + (-int(kBlockN * params.k_row_stride));
-            tKgK.data() = tKgK.data() + binfo.k_advance_offset_pg(bidb_cache, n_block, params.k_row_stride, kBlockN);
+            if (cute::thread0()) {
+                print("advancing tKgK in non-masking step");
+            }
+            tKgK.data() = tKgK.data() + binfo.k_advance_offset_pg(bidb_cache, k_block_idx, params.k_row_stride, kBlockN);
+            k_block_idx--;
             flash::copy</*Is_even_MN=*/true, Is_even_K>(gmem_tiled_copy_QKV, tKgK, tKsK, tKVcKV, tKVpKV);
             // This cp_async_fence needs to be in the if block, otherwise the synchronization
             // isn't right and we get race conditions.

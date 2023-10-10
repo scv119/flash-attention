@@ -59,7 +59,7 @@ struct BlockInfo {
                     index_prev, index_now, cu_pg_attn_block_tables_ptr[index_prev], cu_pg_attn_block_tables_ptr[index_now]);
             printf("current block_id = %d, offset is = %d", current_block_id, offset);
         }
-        return 0;
+        return offset;
     }
 
     const int sum_s_q;
