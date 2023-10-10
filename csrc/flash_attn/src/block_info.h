@@ -50,8 +50,15 @@ struct BlockInfo {
         if (cu_pg_attn_block_tables_ptr == nullptr) {
             return -int(k_block_n * row_stride);
         }
-        // return cu_pg_attn_block_tables_ptr[bidb * pg_attn_block_batch_stride + current_block_id - 1] * pg_attn_cache_block_stride - 
-        //     cu_pg_attn_block_tables_ptr[bidb * pg_attn_block_batch_stride + current_block_id] * pg_attn_cache_block_stride;
+        auto offset = cu_pg_attn_block_tables_ptr[bidb * pg_attn_block_batch_stride + current_block_id - 1] * pg_attn_cache_block_stride - 
+             cu_pg_attn_block_tables_ptr[bidb * pg_attn_block_batch_stride + current_block_id] * pg_attn_cache_block_stride;
+        auto index_prev = bidb * pg_attn_block_batch_stride + current_block_id - 1;
+        auto index_now = bidb * pg_attn_block_batch_stride + current_block_id;
+        if (cute::thread0()) {
+            printf("index_prev = %d, index_now = %d, block_table_id_prev = %d, block_table_id_now = %d", 
+                    index_prev, index_now, cu_pg_attn_block_tables_ptr[index_prev], cu_pg_attn_block_tables_ptr[index_now]);
+            printf("current block_id = %d, offset is = %d", current_block_id, offset);
+        }
         return 0;
     }
 

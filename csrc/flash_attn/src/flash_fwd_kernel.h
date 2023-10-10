@@ -939,9 +939,7 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
         // Advance gV
         if (masking_step > 0) {
             // tVgV.data() = tVgV.data() + (-int(kBlockN * params.v_row_stride));
-            if (tidx == 0 && blockIdx.y == 0 && blockIdx.z == 0) { print(tVgV.data()); }
             tVgV.data() = tVgV.data() + binfo.k_advance_offset_pg(bidb_cache, n_block, params.v_row_stride, kBlockN);
-            if (tidx == 0 && blockIdx.y == 0 && blockIdx.z == 0) { print(tVgV.data()); }
             flash::copy</*Is_even_MN=*/true, Is_even_K>(gmem_tiled_copy_QKV, tVgV, tVsV, tKVcKV, tKVpKV);
         } else {
             // Clear the smem tiles to account for predicated off loads
@@ -981,9 +979,7 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
         if (n_block > n_block_min) {
             // Advance gK
             // tKgK.data() = tKgK.data() + (-int(kBlockN * params.k_row_stride));
-            if (tidx == 0 && blockIdx.y == 0 && blockIdx.z == 0) { print(tKgK.data()); }
             tKgK.data() = tKgK.data() + binfo.k_advance_offset_pg(bidb_cache, n_block, params.k_row_stride, kBlockN);
-            if (tidx == 0 && blockIdx.y == 0 && blockIdx.z == 0) { print(tKgK.data()); }
             flash::copy</*Is_even_MN=*/true, Is_even_K>(gmem_tiled_copy_QKV, tKgK, tKsK, tKVcKV, tKVpKV);
             // This cp_async_fence needs to be in the if block, otherwise the synchronization
             // isn't right and we get race conditions.
@@ -1022,9 +1018,7 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
         __syncthreads();
         // Advance gV
         // tVgV.data() = tVgV.data() + (-int(kBlockN * params.v_row_stride));
-        if (tidx == 0 && blockIdx.y == 0 && blockIdx.z == 0) { print(tVgV.data()); }
         tVgV.data() = tVgV.data() + binfo.k_advance_offset_pg(bidb_cache, n_block, params.v_row_stride, kBlockN);
-        if (tidx == 0 && blockIdx.y == 0 && blockIdx.z == 0) { print(tVgV.data()); }
         flash::copy</*Is_even_MN=*/true, Is_even_K>(gmem_tiled_copy_QKV, tVgV, tVsV, tKVcKV, tKVpKV);
         cute::cp_async_fence();
 
@@ -1038,9 +1032,7 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
         if (n_block > n_block_min) {
             // Advance gK
             // tKgK.data() = tKgK.data() + (-int(kBlockN * params.k_row_stride));
-            if (tidx == 0 && blockIdx.y == 0 && blockIdx.z == 0) { print(tKgK.data()); }
             tKgK.data() = tKgK.data() + binfo.k_advance_offset_pg(bidb_cache, n_block, params.k_row_stride, kBlockN);
-            if (tidx == 0 && blockIdx.y == 0 && blockIdx.z == 0) { print(tKgK.data()); }
             flash::copy</*Is_even_MN=*/true, Is_even_K>(gmem_tiled_copy_QKV, tKgK, tKsK, tKVcKV, tKVpKV);
             // This cp_async_fence needs to be in the if block, otherwise the synchronization
             // isn't right and we get race conditions.
