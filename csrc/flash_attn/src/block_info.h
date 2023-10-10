@@ -38,11 +38,10 @@ struct BlockInfo {
 
     template <typename index_t>
     inline __device__ index_t k_offset_pg(const index_t batch_stride, const index_t row_stride, const int bidb, const int block_id, const int k_block_n) const {
+        assert(cu_pg_attn_block_tables_ptr != nullptr);
         if (cu_pg_attn_block_tables_ptr == nullptr) {
             return k_offset(batch_stride, row_stride, bidb) + block_id * k_block_n * row_stride;
         }
-        assert(block_id == 0);
-        assert(0);
         return cu_pg_attn_block_tables_ptr[bidb * pg_attn_block_batch_stride + block_id] * pg_attn_cache_block_stride;
     }
 
@@ -51,8 +50,9 @@ struct BlockInfo {
         if (cu_pg_attn_block_tables_ptr == nullptr) {
             return -int(k_block_n * row_stride);
         }
-        return cu_pg_attn_block_tables_ptr[bidb * pg_attn_block_batch_stride + current_block_id - 1] * pg_attn_cache_block_stride - 
-            cu_pg_attn_block_tables_ptr[bidb * pg_attn_block_batch_stride + current_block_id] * pg_attn_cache_block_stride;
+        // return cu_pg_attn_block_tables_ptr[bidb * pg_attn_block_batch_stride + current_block_id - 1] * pg_attn_cache_block_stride - 
+        //     cu_pg_attn_block_tables_ptr[bidb * pg_attn_block_batch_stride + current_block_id] * pg_attn_cache_block_stride;
+        return 0;
     }
 
     const int sum_s_q;

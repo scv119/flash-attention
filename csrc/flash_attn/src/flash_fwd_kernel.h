@@ -691,7 +691,8 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
     Tensor gK = make_tensor(make_gmem_ptr(reinterpret_cast<Element *>(params.k_ptr) + row_offset_k),
                             Shape<Int<kBlockN>, Int<kHeadDim>>{},
                             make_stride(params.k_row_stride, _1{}));
-    // if (threadIdx.x == 0 && blockIdx.y == 0 && blockIdx.z == 0) { printf("k_ptr = %p, row_offset_k = %d, gK_ptr = %p\n", params.k_ptr, row_offset_k, gK.data()); }
+    if (threadIdx.x == 0 && blockIdx.y == 0 && blockIdx.z == 0) { 
+        printf("k_ptr = %p, row_offset_k = %d, gK_ptr = %p\n", params.k_ptr, row_offset_k, gK.data()); }
     Tensor gV = make_tensor(make_gmem_ptr(reinterpret_cast<Element *>(params.v_ptr) + row_offset_v),
                             Shape<Int<kBlockN>, Int<kHeadDim>>{},
                             make_stride(params.v_row_stride, _1{}));
@@ -712,6 +713,9 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
     Tensor tKsK = gmem_thr_copy_QKV.partition_D(sK);
     Tensor tVgV = gmem_thr_copy_QKV.partition_S(gV);  // (VCPY, VCPY_N, VCPY_K)
     Tensor tVsV = gmem_thr_copy_QKV.partition_D(sV);
+
+    if (threadIdx.x == 0 && blockIdx.y == 0 && blockIdx.z == 0) { 
+        printf("tKgK = %p, tVgV = %p\n", tKgK.data(), tVgV.data()); }
 
     typename Kernel_traits::TiledMma tiled_mma;
     auto thr_mma = tiled_mma.get_thread_slice(tidx);
@@ -935,7 +939,9 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
         // Advance gV
         if (masking_step > 0) {
             // tVgV.data() = tVgV.data() + (-int(kBlockN * params.v_row_stride));
+            if (tidx == 0 && blockIdx.y == 0 && blockIdx.z == 0) { print(tVgV.data()); }
             tVgV.data() = tVgV.data() + binfo.k_advance_offset_pg(bidb_cache, n_block, params.v_row_stride, kBlockN);
+            if (tidx == 0 && blockIdx.y == 0 && blockIdx.z == 0) { print(tVgV.data()); }
             flash::copy</*Is_even_MN=*/true, Is_even_K>(gmem_tiled_copy_QKV, tVgV, tVsV, tKVcKV, tKVpKV);
         } else {
             // Clear the smem tiles to account for predicated off loads
@@ -975,7 +981,9 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
         if (n_block > n_block_min) {
             // Advance gK
             // tKgK.data() = tKgK.data() + (-int(kBlockN * params.k_row_stride));
+            if (tidx == 0 && blockIdx.y == 0 && blockIdx.z == 0) { print(tKgK.data()); }
             tKgK.data() = tKgK.data() + binfo.k_advance_offset_pg(bidb_cache, n_block, params.k_row_stride, kBlockN);
+            if (tidx == 0 && blockIdx.y == 0 && blockIdx.z == 0) { print(tKgK.data()); }
             flash::copy</*Is_even_MN=*/true, Is_even_K>(gmem_tiled_copy_QKV, tKgK, tKsK, tKVcKV, tKVpKV);
             // This cp_async_fence needs to be in the if block, otherwise the synchronization
             // isn't right and we get race conditions.
@@ -1004,6 +1012,8 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
         }
     }
 
+    if (threadIdx.x == 0 && blockIdx.y == 0 && blockIdx.z == 0) { 
+        printf("n_block = %d, n_block_min = %d\n", n_block, n_block_min); }
     // These are the iterations where we don't need masking on S
     for (; n_block >= n_block_min; --n_block) {
         Tensor acc_s = partition_fragment_C(tiled_mma, Shape<Int<kBlockM>, Int<kBlockN>>{});  // (MMA=4, MMA_M, MMA_N)
@@ -1012,7 +1022,9 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
         __syncthreads();
         // Advance gV
         // tVgV.data() = tVgV.data() + (-int(kBlockN * params.v_row_stride));
+        if (tidx == 0 && blockIdx.y == 0 && blockIdx.z == 0) { print(tVgV.data()); }
         tVgV.data() = tVgV.data() + binfo.k_advance_offset_pg(bidb_cache, n_block, params.v_row_stride, kBlockN);
+        if (tidx == 0 && blockIdx.y == 0 && blockIdx.z == 0) { print(tVgV.data()); }
         flash::copy</*Is_even_MN=*/true, Is_even_K>(gmem_tiled_copy_QKV, tVgV, tVsV, tKVcKV, tKVpKV);
         cute::cp_async_fence();
 
@@ -1026,7 +1038,9 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
         if (n_block > n_block_min) {
             // Advance gK
             // tKgK.data() = tKgK.data() + (-int(kBlockN * params.k_row_stride));
+            if (tidx == 0 && blockIdx.y == 0 && blockIdx.z == 0) { print(tKgK.data()); }
             tKgK.data() = tKgK.data() + binfo.k_advance_offset_pg(bidb_cache, n_block, params.k_row_stride, kBlockN);
+            if (tidx == 0 && blockIdx.y == 0 && blockIdx.z == 0) { print(tKgK.data()); }
             flash::copy</*Is_even_MN=*/true, Is_even_K>(gmem_tiled_copy_QKV, tKgK, tKsK, tKVcKV, tKVpKV);
             // This cp_async_fence needs to be in the if block, otherwise the synchronization
             // isn't right and we get race conditions.

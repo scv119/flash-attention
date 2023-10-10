@@ -44,7 +44,7 @@ SKIP_CUDA_BUILD = os.getenv("FLASH_ATTENTION_SKIP_CUDA_BUILD", "FALSE") == "TRUE
 # For CI, we want the option to build with C++11 ABI since the nvcr images use C++11 ABI
 FORCE_CXX11_ABI = os.getenv("FLASH_ATTENTION_FORCE_CXX11_ABI", "FALSE") == "TRUE"
 # For CI, we want the option to not add "--threads 4" to nvcc, since the runner can OOM
-FORCE_SINGLE_THREAD = os.getenv("FLASH_ATTENTION_FORCE_SINGLE_THREAD", "FALSE") == "TRUE"
+FORCE_SINGLE_THREAD = os.getenv("FLASH_ATTENTION_FORCE_SINGLE_THREAD", "TRUE") == "TRUE"
 
 
 def get_platform():
@@ -85,7 +85,7 @@ def check_if_cuda_home_none(global_option: str) -> None:
 
 def append_nvcc_threads(nvcc_extra_args):
     if not FORCE_SINGLE_THREAD:
-        return nvcc_extra_args + ["--threads", "4"]
+        return nvcc_extra_args + ["--threads", "16"]
     return nvcc_extra_args
 
 

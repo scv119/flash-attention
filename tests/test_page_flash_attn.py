@@ -623,6 +623,8 @@ def test_flash_attn_page(
         dtype=torch.int32,
         device=device,
     )
+    cache_seqlens[0] = 256
+    cache_seqlens[1] = 256
     if has_batch_idx:
         cache_batch_idx = torch.randperm(batch_size_cache, dtype=torch.int32, device=device)[:batch_size]
     else:
