@@ -548,10 +548,10 @@ def get_dropout_fraction(
 # @pytest.mark.parametrize("has_batch_idx", [False, True])
 @pytest.mark.parametrize("has_batch_idx", [False])
 # @pytest.mark.parametrize("d", [32, 59, 64, 80, 96, 128, 160, 192, 224, 256])
-# @pytest.mark.parametrize('d', [32, 64, 96, 128, 160, 192, 224, 256])
+@pytest.mark.parametrize('d', [32, 64, 96, 128, 160, 192, 224, 256])
 # @pytest.mark.parametrize('d', [32, 40, 64, 80, 96, 128, 160, 192])
 # @pytest.mark.parametrize('d', [56, 80])
-@pytest.mark.parametrize("d", [128])
+# @pytest.mark.parametrize("d", [128])
 @pytest.mark.parametrize(
     "seqlen_q,seqlen_k",
     [
@@ -592,7 +592,7 @@ def test_flash_attn_page(
     # set seed
     torch.random.manual_seed(0)
 
-    page_block_size = 128
+    page_block_size = 32
     num_pages = 10
     batch_size = 2
     max_page_len = (seqlen_k - 1) // page_block_size + 1
