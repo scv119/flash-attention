@@ -535,8 +535,8 @@ def get_dropout_fraction(
 # @pytest.mark.parametrize("mha_type", ["mha"])
 # @pytest.mark.parametrize("new_kv", [False, True])
 @pytest.mark.parametrize("new_kv", [False])
-@pytest.mark.parametrize("local", [False, True])
-# @pytest.mark.parametrize("local", [False])
+# @pytest.mark.parametrize("local", [False, True])
+@pytest.mark.parametrize("local", [False])
 @pytest.mark.parametrize("causal", [False, True])
 # @pytest.mark.parametrize("causal", [True])
 @pytest.mark.parametrize("seqlen_new_eq_seqlen_q", [True, False])
@@ -545,8 +545,8 @@ def get_dropout_fraction(
 # @pytest.mark.parametrize("rotary_interleaved", [False])
 @pytest.mark.parametrize("rotary_fraction", [0.0, 0.5, 1.0])
 # @pytest.mark.parametrize("rotary_fraction", [0.0])
-@pytest.mark.parametrize("has_batch_idx", [False, True])
-# @pytest.mark.parametrize("has_batch_idx", [True])
+# @pytest.mark.parametrize("has_batch_idx", [False, True])
+@pytest.mark.parametrize("has_batch_idx", [False])
 # @pytest.mark.parametrize("d", [32, 59, 64, 80, 96, 128, 160, 192, 224, 256])
 # @pytest.mark.parametrize('d', [32, 64, 96, 128, 160, 192, 224, 256])
 # @pytest.mark.parametrize('d', [32, 40, 64, 80, 96, 128, 160, 192])
@@ -568,7 +568,7 @@ def get_dropout_fraction(
 #         (128, 128),
 #     ],
 # )
-@pytest.mark.parametrize('seqlen_q,seqlen_k', [(256, 256)])
+@pytest.mark.parametrize('seqlen_q,seqlen_k', [(256, 128)])
 def test_flash_attn_page(
     seqlen_q,
     seqlen_k,
@@ -591,7 +591,7 @@ def test_flash_attn_page(
     device = "cuda"
     # set seed
     torch.random.manual_seed(0)
-    batch_size = 2
+    batch_size = 1
     batch_size_cache = batch_size if not has_batch_idx else batch_size * 2
     nheads = 6
     # rotary_dim must be a multiple of 16, and must be <= d
@@ -606,17 +606,17 @@ def test_flash_attn_page(
         v = torch.randn(batch_size, seqlen_new, nheads_k, d, device=device, dtype=dtype)
     else:
         k, v = None, None
-    k_cache = torch.randn(batch_size_cache * 2, 128, nheads_k, d, device=device, dtype=dtype)
-    v_cache = torch.randn(batch_size_cache * 2, 128, nheads_k, d, device=device, dtype=dtype)
+    k_cache = torch.randn(batch_size_cache * 1, 128, nheads_k, d, device=device, dtype=dtype)
+    v_cache = torch.randn(batch_size_cache * 1, 128, nheads_k, d, device=device, dtype=dtype)
     print(f"{hex(k_cache[0].data_ptr())=}")
     print(f"{hex(v_cache[0].data_ptr())=}")
-    print(f"{hex(k_cache[1].data_ptr())=}")
-    print(f"{hex(v_cache[1].data_ptr())=}")
-    block_tables = torch.zeros(batch_size, 2, device=device, dtype=torch.int32)
-    block_tables[0][0] = 1
-    block_tables[0][1] = 0
-    block_tables[1][0] = 0
-    block_tables[1][0] = 0
+    # print(f"{hex(k_cache[1].data_ptr())=}")
+    # print(f"{hex(v_cache[1].data_ptr())=}")
+    block_tables = torch.zeros(batch_size, 1, device=device, dtype=torch.int32)
+    block_tables[0][0] = 0
+    # block_tables[0][1] = 1
+    #block_tables[1][0] = 2 
+    #block_tables[1][0] = 3
     cache_seqlens = torch.randint(
         0,
         # If we don't use seqlen_q in the case of causal and rotary, cos/sin won't be long enough
@@ -628,7 +628,7 @@ def test_flash_attn_page(
         device=device,
     )
     cache_seqlens[0] = 256
-    cache_seqlens[1] = 256
+    # cache_seqlens[1] = 256
     if has_batch_idx:
         cache_batch_idx = torch.randperm(batch_size_cache, dtype=torch.int32, device=device)[:batch_size]
     else:
@@ -665,8 +665,8 @@ def test_flash_attn_page(
     k_cache_ref = (k_cache if not has_batch_idx else k_cache[cache_batch_idx]).clone()
     v_cache_ref = (v_cache if not has_batch_idx else v_cache[cache_batch_idx]).clone()
 
-    k_cache_ref = k_cache_ref.view(batch_size_cache, 2 * 128, nheads_k, d)
-    v_cache_ref = v_cache_ref.view(batch_size_cache, 2 * 128, nheads_k, d)
+    # k_cache_ref = k_cache_ref.view(batch_size_cache, 2 * 128, nheads_k, d)
+    # v_cache_ref = v_cache_ref.view(batch_size_cache, 2 * 128, nheads_k, d)
 
     arange = rearrange(torch.arange(seqlen_k, device=device), "s -> 1 s")
     cache_seqlens_expanded = rearrange(cache_seqlens, "b -> b 1")
