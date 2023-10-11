@@ -608,11 +608,15 @@ def test_flash_attn_page(
         k, v = None, None
     k_cache = torch.randn(batch_size_cache * 2, 128, nheads_k, d, device=device, dtype=dtype)
     v_cache = torch.randn(batch_size_cache * 2, 128, nheads_k, d, device=device, dtype=dtype)
+    print(f"{hex(k_cache[0].data_ptr())=}")
+    print(f"{hex(v_cache[0].data_ptr())=}")
+    print(f"{hex(k_cache[1].data_ptr())=}")
+    print(f"{hex(v_cache[1].data_ptr())=}")
     block_tables = torch.zeros(batch_size, 2, device=device, dtype=torch.int32)
-    block_tables[0][0] = 0
-    block_tables[0][1] = 1
-    block_tables[1][0] = 2
-    block_tables[1][0] = 3
+    block_tables[0][0] = 1
+    block_tables[0][1] = 0
+    block_tables[1][0] = 0
+    block_tables[1][0] = 0
     cache_seqlens = torch.randint(
         0,
         # If we don't use seqlen_q in the case of causal and rotary, cos/sin won't be long enough

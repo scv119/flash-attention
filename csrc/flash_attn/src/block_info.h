@@ -46,19 +46,20 @@ struct BlockInfo {
     }
 
     template <typename index_t>
-    inline __device__ index_t k_advance_offset_pg(const int bidb, const int current_block_id, const index_t row_stride, const int k_block_n) const {
+    inline __device__ int k_advance_offset_pg(const int bidb, const int current_block_id, const index_t row_stride, const int k_block_n) const {
         if (cu_pg_attn_block_tables_ptr == nullptr) {
             return -int(k_block_n * row_stride);
         }
-        auto offset = cu_pg_attn_block_tables_ptr[bidb * pg_attn_block_batch_stride + current_block_id - 1] * pg_attn_cache_block_stride - 
+        int offset = cu_pg_attn_block_tables_ptr[bidb * pg_attn_block_batch_stride + current_block_id - 1] * pg_attn_cache_block_stride - 
              cu_pg_attn_block_tables_ptr[bidb * pg_attn_block_batch_stride + current_block_id] * pg_attn_cache_block_stride;
-        auto index_prev = bidb * pg_attn_block_batch_stride + current_block_id - 1;
-        auto index_now = bidb * pg_attn_block_batch_stride + current_block_id;
+        int index_prev = bidb * pg_attn_block_batch_stride + current_block_id - 1;
+        int index_now = bidb * pg_attn_block_batch_stride + current_block_id;
         if (cute::thread0()) {
             printf("index_prev = %d, index_now = %d, block_table_id_prev = %d, block_table_id_now = %d", 
                     index_prev, index_now, cu_pg_attn_block_tables_ptr[index_prev], cu_pg_attn_block_tables_ptr[index_now]);
             printf("current block_id = %d, offset is = %d", current_block_id, offset);
         }
+        assert(current_block_id >= 1);
         return offset;
     }
 

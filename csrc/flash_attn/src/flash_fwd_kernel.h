@@ -691,11 +691,12 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
     Tensor gK = make_tensor(make_gmem_ptr(reinterpret_cast<Element *>(params.k_ptr) + row_offset_k),
                             Shape<Int<kBlockN>, Int<kHeadDim>>{},
                             make_stride(params.k_row_stride, _1{}));
-    if (threadIdx.x == 0 && blockIdx.y == 0 && blockIdx.z == 0) { 
-        printf("k_ptr = %p, row_offset_k = %d, gK_ptr = %p\n", params.k_ptr, row_offset_k, gK.data()); }
     Tensor gV = make_tensor(make_gmem_ptr(reinterpret_cast<Element *>(params.v_ptr) + row_offset_v),
                             Shape<Int<kBlockN>, Int<kHeadDim>>{},
                             make_stride(params.v_row_stride, _1{}));
+    if (threadIdx.x == 0 && blockIdx.y == 0 && blockIdx.z == 0) { 
+        printf("k_ptr = %p, row_offset_k = %d, gK_ptr = %p\n", params.k_ptr, row_offset_k, gK.data()); 
+        printf("v_ptr = %p, row_offset_v = %d, gV_ptr = %p\n", params.v_ptr, row_offset_v, gV.data()); }
 
     Tensor sQ = make_tensor(make_smem_ptr(reinterpret_cast<Element *>(smem_)),
                             typename Kernel_traits::SmemLayoutQ{});
@@ -942,7 +943,7 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
         if (masking_step > 0) {
             // tVgV.data() = tVgV.data() + (-int(kBlockN * params.v_row_stride));
             if (cute::thread0()) {
-                print("advancing tVgV in masking step");
+                print("advancing tVgV in masking step\n");
             }
             tVgV.data() = tVgV.data() + binfo.k_advance_offset_pg(bidb_cache, v_block_idx, params.v_row_stride, kBlockN);
             v_block_idx --;
@@ -986,7 +987,7 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
             // Advance gK
             // tKgK.data() = tKgK.data() + (-int(kBlockN * params.k_row_stride));
             if (cute::thread0()) {
-                print("advancing tKgK in masking step");
+                print("advancing tKgK in masking step\n");
             }
             tKgK.data() = tKgK.data() + binfo.k_advance_offset_pg(bidb_cache, k_block_idx, params.k_row_stride, kBlockN);
             k_block_idx--;
@@ -1029,7 +1030,7 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
         // Advance gV
         // tVgV.data() = tVgV.data() + (-int(kBlockN * params.v_row_stride));
         if (cute::thread0()) {
-            print("advancing tVgV in non-masking step");
+            print("advancing tVgV in non-masking step\n");
         }
         tVgV.data() = tVgV.data() + binfo.k_advance_offset_pg(bidb_cache, v_block_idx, params.v_row_stride, kBlockN);
         v_block_idx--;
@@ -1047,7 +1048,7 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
             // Advance gK
             // tKgK.data() = tKgK.data() + (-int(kBlockN * params.k_row_stride));
             if (cute::thread0()) {
-                print("advancing tKgK in non-masking step");
+                print("advancing tKgK in non-masking step\n");
             }
             tKgK.data() = tKgK.data() + binfo.k_advance_offset_pg(bidb_cache, k_block_idx, params.k_row_stride, kBlockN);
             k_block_idx--;
