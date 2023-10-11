@@ -1014,8 +1014,6 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
         }
     }
 
-    if (threadIdx.x == 0 && blockIdx.y == 0 && blockIdx.z == 0) { 
-        printf("n_block = %d, n_block_min = %d\n", n_block, n_block_min); }
     // These are the iterations where we don't need masking on S
     for (; n_block >= n_block_min; --n_block) {
         Tensor acc_s = partition_fragment_C(tiled_mma, Shape<Int<kBlockM>, Int<kBlockN>>{});  // (MMA=4, MMA_M, MMA_N)
