@@ -38,11 +38,16 @@ struct BlockInfo {
 
     template <typename index_t>
     inline __device__ index_t k_offset_pg(const index_t batch_stride, const index_t row_stride, const int bidb, const int block_id, const int k_block_n) const {
-        assert(cu_pg_attn_block_tables_ptr != nullptr);
-        if (cu_pg_attn_block_tables_ptr == nullptr) {
-            return k_offset(batch_stride, row_stride, bidb) + block_id * k_block_n * row_stride;
+        auto original_offset = k_offset(batch_stride, row_stride, bidb) + block_id * k_block_n * row_stride;
+        auto pg_offset = cu_pg_attn_block_tables_ptr[bidb * pg_attn_block_batch_stride + block_id] * pg_attn_cache_block_stride;
+
+        if (cute::thread0()) {
+            printf("original_offset = %d, pg_offset is = %d", original_offset, pg_offset);
         }
-        return cu_pg_attn_block_tables_ptr[bidb * pg_attn_block_batch_stride + block_id] * pg_attn_cache_block_stride;
+        if (cu_pg_attn_block_tables_ptr == nullptr) {
+            return original_offset;
+        }
+        return pg_offset;
     }
 
     template <typename index_t>
@@ -50,6 +55,7 @@ struct BlockInfo {
         if (cu_pg_attn_block_tables_ptr == nullptr) {
             return -int(k_block_n * row_stride);
         }
+        int origin_offset = -int(k_block_n * row_stride);
         int offset = cu_pg_attn_block_tables_ptr[bidb * pg_attn_block_batch_stride + current_block_id - 1] * pg_attn_cache_block_stride - 
              cu_pg_attn_block_tables_ptr[bidb * pg_attn_block_batch_stride + current_block_id] * pg_attn_cache_block_stride;
         int index_prev = bidb * pg_attn_block_batch_stride + current_block_id - 1;
@@ -57,7 +63,7 @@ struct BlockInfo {
         if (cute::thread0()) {
             printf("index_prev = %d, index_now = %d, block_table_id_prev = %d, block_table_id_now = %d", 
                     index_prev, index_now, cu_pg_attn_block_tables_ptr[index_prev], cu_pg_attn_block_tables_ptr[index_now]);
-            printf("current block_id = %d, offset is = %d", current_block_id, offset);
+            printf("current block_id = %d, offset is = %d, origin_offset = %d\n", current_block_id, offset, origin_offset);
         }
         assert(current_block_id >= 1);
         return offset;

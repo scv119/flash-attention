@@ -568,7 +568,7 @@ def get_dropout_fraction(
 #         (128, 128),
 #     ],
 # )
-@pytest.mark.parametrize('seqlen_q,seqlen_k', [(256, 128)])
+@pytest.mark.parametrize('seqlen_q,seqlen_k', [(256, 256)])
 def test_flash_attn_page(
     seqlen_q,
     seqlen_k,
@@ -606,15 +606,15 @@ def test_flash_attn_page(
         v = torch.randn(batch_size, seqlen_new, nheads_k, d, device=device, dtype=dtype)
     else:
         k, v = None, None
-    k_cache = torch.randn(batch_size_cache * 1, 128, nheads_k, d, device=device, dtype=dtype)
-    v_cache = torch.randn(batch_size_cache * 1, 128, nheads_k, d, device=device, dtype=dtype)
+    k_cache = torch.randn(batch_size_cache * 2, 128, nheads_k, d, device=device, dtype=dtype)
+    v_cache = torch.randn(batch_size_cache * 2, 128, nheads_k, d, device=device, dtype=dtype)
     print(f"{hex(k_cache[0].data_ptr())=}")
     print(f"{hex(v_cache[0].data_ptr())=}")
     # print(f"{hex(k_cache[1].data_ptr())=}")
     # print(f"{hex(v_cache[1].data_ptr())=}")
-    block_tables = torch.zeros(batch_size, 1, device=device, dtype=torch.int32)
+    block_tables = torch.zeros(batch_size, 2, device=device, dtype=torch.int32)
     block_tables[0][0] = 0
-    # block_tables[0][1] = 1
+    block_tables[0][1] = 1
     #block_tables[1][0] = 2 
     #block_tables[1][0] = 3
     cache_seqlens = torch.randint(
@@ -627,8 +627,6 @@ def test_flash_attn_page(
         dtype=torch.int32,
         device=device,
     )
-    cache_seqlens[0] = 256
-    # cache_seqlens[1] = 256
     if has_batch_idx:
         cache_batch_idx = torch.randperm(batch_size_cache, dtype=torch.int32, device=device)[:batch_size]
     else:
@@ -665,8 +663,8 @@ def test_flash_attn_page(
     k_cache_ref = (k_cache if not has_batch_idx else k_cache[cache_batch_idx]).clone()
     v_cache_ref = (v_cache if not has_batch_idx else v_cache[cache_batch_idx]).clone()
 
-    # k_cache_ref = k_cache_ref.view(batch_size_cache, 2 * 128, nheads_k, d)
-    # v_cache_ref = v_cache_ref.view(batch_size_cache, 2 * 128, nheads_k, d)
+    k_cache_ref = k_cache_ref.view(batch_size_cache, 2 * 128, nheads_k, d)
+    v_cache_ref = v_cache_ref.view(batch_size_cache, 2 * 128, nheads_k, d)
 
     arange = rearrange(torch.arange(seqlen_k, device=device), "s -> 1 s")
     cache_seqlens_expanded = rearrange(cache_seqlens, "b -> b 1")
