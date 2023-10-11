@@ -552,23 +552,23 @@ def get_dropout_fraction(
 # @pytest.mark.parametrize('d', [32, 40, 64, 80, 96, 128, 160, 192])
 # @pytest.mark.parametrize('d', [56, 80])
 @pytest.mark.parametrize("d", [128])
-# @pytest.mark.parametrize(
-#     "seqlen_q,seqlen_k",
-#     [
-#         (1, 128),
-#         (1, 339),
-#         (3, 1024),
-#         (64, 800),
-#         (64, 256),
-#         (3, 799),
-#         (64, 2048),
-#         (16, 20000),
-#         (1, 128 * 1024),
-#         (16, 128 * 1024),
-#         (128, 128),
-#     ],
-# )
-@pytest.mark.parametrize('seqlen_q,seqlen_k', [(256, 256)])
+@pytest.mark.parametrize(
+    "seqlen_q,seqlen_k",
+    [
+        (1, 128),
+        (1, 339),
+        (3, 1024),
+        (64, 800),
+        (64, 256),
+        (3, 799),
+        (64, 2048),
+        (16, 20000),
+        (1, 128 * 1024),
+        (16, 128 * 1024),
+        (128, 128),
+    ],
+)
+# @pytest.mark.parametrize('seqlen_q,seqlen_k', [(256, 256)])
 def test_flash_attn_page(
     seqlen_q,
     seqlen_k,
@@ -591,7 +591,12 @@ def test_flash_attn_page(
     device = "cuda"
     # set seed
     torch.random.manual_seed(0)
-    batch_size = 1
+
+    page_block_size = 128
+    num_pages = 10
+    batch_size = 2
+    max_page_len = (seqlen_k - 1) // page_block_size + 1
+    
     batch_size_cache = batch_size if not has_batch_idx else batch_size * 2
     nheads = 6
     # rotary_dim must be a multiple of 16, and must be <= d
@@ -606,17 +611,13 @@ def test_flash_attn_page(
         v = torch.randn(batch_size, seqlen_new, nheads_k, d, device=device, dtype=dtype)
     else:
         k, v = None, None
-    k_cache = torch.randn(batch_size_cache * 2, 128, nheads_k, d, device=device, dtype=dtype)
-    v_cache = torch.randn(batch_size_cache * 2, 128, nheads_k, d, device=device, dtype=dtype)
-    print(f"{hex(k_cache[0].data_ptr())=}")
-    print(f"{hex(v_cache[0].data_ptr())=}")
-    # print(f"{hex(k_cache[1].data_ptr())=}")
-    # print(f"{hex(v_cache[1].data_ptr())=}")
-    block_tables = torch.zeros(batch_size, 2, device=device, dtype=torch.int32)
-    block_tables[0][0] = 0
-    block_tables[0][1] = 1
-    #block_tables[1][0] = 2 
-    #block_tables[1][0] = 3
+
+    k_cache = torch.randn(num_pages, page_block_size, nheads_k, d, device=device, dtype=dtype)
+    v_cache = torch.randn(num_pages, page_block_size, nheads_k, d, device=device, dtype=dtype)
+
+    # random mapping.
+    block_tables = torch.randint(0, num_pages, (batch_size, max_page_len), device=device, dtype=torch.int32)
+
     cache_seqlens = torch.randint(
         0,
         # If we don't use seqlen_q in the case of causal and rotary, cos/sin won't be long enough
@@ -663,8 +664,14 @@ def test_flash_attn_page(
     k_cache_ref = (k_cache if not has_batch_idx else k_cache[cache_batch_idx]).clone()
     v_cache_ref = (v_cache if not has_batch_idx else v_cache[cache_batch_idx]).clone()
 
-    k_cache_ref = k_cache_ref.view(batch_size_cache, 2 * 128, nheads_k, d)
-    v_cache_ref = v_cache_ref.view(batch_size_cache, 2 * 128, nheads_k, d)
+    k_cache_ref = torch.index_select(k_cache_ref, 0, block_tables.view(batch_size * max_page_len))
+    v_cache_ref = torch.index_select(v_cache_ref, 0, block_tables.view(batch_size * max_page_len))
+
+    k_cache_ref = k_cache_ref.view(batch_size_cache, max_page_len * page_block_size, nheads_k, d)
+    v_cache_ref = v_cache_ref.view(batch_size_cache, max_page_len * page_block_size, nheads_k, d)
+    k_cache_ref = k_cache_ref[:, :seqlen_k, :, :]
+    v_cache_ref = v_cache_ref[:, :seqlen_k, :, :]
+
 
     arange = rearrange(torch.arange(seqlen_k, device=device), "s -> 1 s")
     cache_seqlens_expanded = rearrange(cache_seqlens, "b -> b 1")
