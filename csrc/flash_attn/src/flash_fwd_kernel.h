@@ -1224,6 +1224,7 @@ inline __device__ void combine_attn_seqk_parallel(const Params &params) {
     const int bidx = blockIdx.x;
 
     const index_t row_offset_lse = bidx * kBlockM;
+    // TODO(scv119): is lse correct when q is varlen?
     Tensor gLSEaccum = make_tensor(make_gmem_ptr(reinterpret_cast<ElementAccum *>(params.softmax_lseaccum_ptr) + row_offset_lse),
                                    Shape<Int<kMaxSplits>, Int<kBlockM>>{},
                                    make_stride(params.b * params.h * params.seqlen_q, _1{}));
@@ -1351,6 +1352,10 @@ inline __device__ void combine_attn_seqk_parallel(const Params &params) {
             if (params.cu_seqlens_q != nullptr) {
                 // TODO(scv119) this requires optimization
                 batch_offset = params.cu_seqlens_q[batch_idx] * params.o_row_stride;
+                auto actual_q_len = params.cu_seqlens_q[batch_idx + 1] -  params.cu_seqlens_q[batch_idx];
+                if (row >= actual_q_len) {
+                    continue;
+                }
             }
             auto o_ptr = reinterpret_cast<Element *>(params.o_ptr) + batch_offset
                 + head_idx * params.o_head_stride + row * params.o_row_stride;
