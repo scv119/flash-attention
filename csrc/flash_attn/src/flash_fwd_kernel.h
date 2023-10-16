@@ -1345,7 +1345,14 @@ inline __device__ void combine_attn_seqk_parallel(const Params &params) {
             const int head_idx = (idx - batch_idx * (params.h * params.seqlen_q)) / params.seqlen_q;
             // The index to the rows of Q
             const int row = idx - batch_idx * (params.h * params.seqlen_q) - head_idx * params.seqlen_q;
-            auto o_ptr = reinterpret_cast<Element *>(params.o_ptr) + batch_idx * params.o_batch_stride
+
+            int batch_offset = batch_idx * params.o_batch_stride;
+            // varlen
+            if (params.cu_seqlens_q != nullptr) {
+                // TODO(scv119) this requires optimization
+                batch_offset = params.cu_seqlens_q[batch_idx] * params.o_row_stride;
+            }
+            auto o_ptr = reinterpret_cast<Element *>(params.o_ptr) + batch_offset
                 + head_idx * params.o_head_stride + row * params.o_row_stride;
             #pragma unroll
             for (int k = 0; k < size<2>(rO); ++k) {
