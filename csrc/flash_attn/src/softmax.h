@@ -145,6 +145,10 @@ inline __device__ void apply_mask_local(Tensor<Engine, Layout> &tensor, const in
                                         const int max_seqlen_q, const int warp_row_stride,
                                         const int window_size_left, const int window_size_right) {
     // tensor has shape (ncol=(2, MMA_M), nrow=(2, MMA_N))
+    // if (cute::thread0()) {
+    //      print("apply_mask_local, col_idx_offset_=%d, max_seqlen_k=%d, row_idx_offset_=%d, max_seqlen_q=%d, warp_row_stride=%d, window_size_left=%d, window_size_right=%d\n",
+    //             col_idx_offset_, max_seqlen_k, row_idx_offset_, max_seqlen_q, warp_row_stride, window_size_left, window_size_right);
+    // }
     static_assert(Layout::rank == 2, "Only support 2D Tensor");
     const int lane_id = threadIdx.x % 32;
     // const int row_idx_offset = row_idx_offset_ + lane_id / 4;

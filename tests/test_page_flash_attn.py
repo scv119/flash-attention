@@ -537,8 +537,8 @@ def get_dropout_fraction(
 @pytest.mark.parametrize("new_kv", [False])
 # @pytest.mark.parametrize("local", [False, True])
 @pytest.mark.parametrize("local", [False])
-# @pytest.mark.parametrize("causal", [False, True])
-@pytest.mark.parametrize("causal", [False]) # TODO: fix this.
+@pytest.mark.parametrize("causal", [False, True])
+# @pytest.mark.parametrize("causal", [True]) # TODO: fix this.
 # @pytest.mark.parametrize("seqlen_new_eq_seqlen_q", [True, False])
 @pytest.mark.parametrize("seqlen_new_eq_seqlen_q", [True])
 # @pytest.mark.parametrize("rotary_interleaved", [False, True])
