@@ -719,19 +719,18 @@ def test_flash_attn_page(
         )
 
         assert batch_size == 2
-        seqlen_q_0 = 1
-        if seqlen_q > 1:
-            truncated_len = torch.randint(
-                1,
-                seqlen_q,
-                (1,),
-                dtype=torch.int32,
-                device=device,
-            )
-            seqlen_q_0 = truncated_len[0]
+        truncated_len = torch.randint(
+            1,
+            seqlen_q + 1,
+            (2,),
+            dtype=torch.int32,
+            device=device,
+        )
+        seqlen_q_0 = truncated_len[0]
+        seqlen_q_1 = truncated_len[1]
         cache_seqlens_q[1] = seqlen_q_0
-        cache_seqlens_q[2] = seqlen_q_0 + seqlen_q
-        indices = list(range(0, seqlen_q_0)) + list(range(seqlen_q, seqlen_q * 2))
+        cache_seqlens_q[2] = seqlen_q_0 + seqlen_q_1
+        indices = list(range(0, seqlen_q_0)) + list(range(seqlen_q, seqlen_q + seqlen_q_1))
         q_selected = q_view[indices, :, :]
 
         print("running varlen paged attention truncated...")
@@ -758,7 +757,7 @@ def test_flash_attn_page(
         )
         torch.cuda.synchronize()
         assert torch.allclose(out1[:seqlen_q_0, :, :], out2[:seqlen_q_0, :, :], rtol=1e-05, atol=1e-08,)
-        assert torch.allclose(out1[-seqlen_q:, :, :], out2[-seqlen_q:, :, :], rtol=1e-05, atol=1e-08,)
+        assert torch.allclose(out1[seqlen_q:seqlen_q + seqlen_q_1, :, :], out2[-seqlen_q_1:, :, :], rtol=1e-05, atol=1e-08,)
     print("running paged attention...")
     out = flash_attn_with_page_attention(
         q,
