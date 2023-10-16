@@ -626,6 +626,7 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
         // or get wrong results when we combine gOaccum from different blocks.
         const index_t row_offset_o = binfo.q_offset(params.o_batch_stride, params.o_row_stride, bidb)
             + m_block * kBlockM * params.o_row_stride + bidh * params.o_head_stride;
+        // TODO(scv119): this might be wrong...
         const index_t row_offset_oaccum = (((n_split_idx * params.b + bidb) * params.h + bidh) * params.seqlen_q
             + m_block * kBlockM) * params.d_rounded;
         const index_t row_offset_lseaccum = ((n_split_idx * params.b + bidb) * params.h + bidh) * params.seqlen_q + m_block * kBlockM;
@@ -689,9 +690,9 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
     Tensor gV = make_tensor(make_gmem_ptr(reinterpret_cast<Element *>(params.v_ptr) + row_offset_v),
                             Shape<Int<kBlockN>, Int<kHeadDim>>{},
                             make_stride(params.v_row_stride, _1{}));
-    // if (threadIdx.x == 0 && blockIdx.y == 0 && blockIdx.z == 0) { 
-    //     printf("k_ptr = %p, row_offset_k = %d, gK_ptr = %p\n", params.k_ptr, row_offset_k, gK.data()); 
-    //     printf("v_ptr = %p, row_offset_v = %d, gV_ptr = %p\n", params.v_ptr, row_offset_v, gV.data()); }
+    if (threadIdx.x == 0 && blockIdx.y == 0 && blockIdx.z == 0) { 
+        printf("k_ptr = %p, row_offset_k = %d, gK_ptr = %p\n", params.k_ptr, row_offset_k, gK.data()); 
+        printf("v_ptr = %p, row_offset_v = %d, gV_ptr = %p\n", params.v_ptr, row_offset_v, gV.data()); }
 
     Tensor sQ = make_tensor(make_smem_ptr(reinterpret_cast<Element *>(smem_)),
                             typename Kernel_traits::SmemLayoutQ{});
@@ -710,8 +711,8 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
     Tensor tVgV = gmem_thr_copy_QKV.partition_S(gV);  // (VCPY, VCPY_N, VCPY_K)
     Tensor tVsV = gmem_thr_copy_QKV.partition_D(sV);
 
-    // if (threadIdx.x == 0 && blockIdx.y == 0 && blockIdx.z == 0) { 
-    //     printf("tKgK = %p, tVgV = %p\n", tKgK.data(), tVgV.data()); }
+    if (threadIdx.x == 0 && blockIdx.y == 0 && blockIdx.z == 0) { 
+        printf("tKgK = %p, tVgV = %p\n", tKgK.data(), tVgV.data()); }
 
     typename Kernel_traits::TiledMma tiled_mma;
     auto thr_mma = tiled_mma.get_thread_slice(tidx);
@@ -955,11 +956,11 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
             acc_s, tSrQ, tSrK, tSsQ, tSsK, tiled_mma, smem_tiled_copy_Q, smem_tiled_copy_K,
             smem_thr_copy_Q, smem_thr_copy_K
         );
-        // if (cute::thread0()) { print(acc_s); }
+        if (cute::thread0()) { print(acc_s); }
 
         // Reshape acc_s from (MMA=4, MMA_M, MMA_N) to (nrow=(2, MMA_M), ncol=(2, MMA_N))
         Tensor scores = make_tensor(acc_s.data(), flash::convert_layout_acc_rowcol(acc_s.layout()));
-        // if (cute::thread0()) { print(scores); }
+        if (cute::thread0()) { print(scores); }
         // We don't put the masking before the matmul S = Q K^T because we don't clear sK
         // for rows outside actual_seqlen_k. So those rows could have Inf / NaN, and the matmul
         // can produce Inf / NaN.
@@ -975,7 +976,7 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
 
         flash::cp_async_wait<0>();
         __syncthreads();
-        // if (tidx == 0 && blockIdx.y == 0 && blockIdx.z == 0) { print(tVsV); }
+        if (tidx == 0 && blockIdx.y == 0 && blockIdx.z == 0) { print(tVsV); }
         // __syncthreads();
 
         if (n_block > n_block_min) {
@@ -996,7 +997,7 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
         masking_step == 0
             ? softmax_rescale_o</*Is_first=*/true,  /*Check_inf=*/Is_causal || Is_local || !Is_even_MN>(scores, scores_max, scores_sum, acc_o, params.scale_softmax_log2)
             : softmax_rescale_o</*Is_first=*/false, /*Check_inf=*/Is_causal || Is_local || !Is_even_MN>(scores, scores_max, scores_sum, acc_o, params.scale_softmax_log2);
-        // if (cute::thread0()) { print(scores_max); print(scores_sum); print(scores); }
+        if (cute::thread0()) { print(scores_max); print(scores_sum); print(scores); }
 
         // Convert scores from fp32 to fp16/bf16
         Tensor rP = flash::convert_type<Element>(scores);
@@ -1005,7 +1006,7 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
         Tensor tOrP = make_tensor(rP.data(), flash::convert_layout_rowcol_Aregs<Kernel_traits::TiledMma>(rP.layout()));
 
         flash::gemm_A_in_regs(acc_o, tOrP, tOrVt, tOsVt, tiled_mma, smem_tiled_copy_V, smem_thr_copy_V);
-        // if (cute::thread0()) { print(scores); }
+        if (cute::thread0()) { print(scores); }
 
         // This check is at the end of the loop since we always have at least 1 iteration
         if (n_masking_steps > 1 && n_block <= n_block_min) {
@@ -1108,6 +1109,7 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
 
     cute::copy(smem_tiled_copy_Oaccum, taccOrOaccum, taccOsOaccum);
 
+    // TODO(scv119): this might be wrong for valren q.
     const index_t row_offset_o = binfo.q_offset(params.o_batch_stride, params.o_row_stride, bidb)
         + m_block * kBlockM * params.o_row_stride + bidh * params.o_head_stride;
     const index_t row_offset_oaccum = (((n_split_idx * params.b + bidb) * params.h + bidh) * params.seqlen_q
@@ -1119,7 +1121,7 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
                                  make_stride(Split ? kHeadDim : params.o_row_stride, _1{}));
     Tensor gLSEaccum = make_tensor(make_gmem_ptr(reinterpret_cast<ElementAccum *>(Split ? params.softmax_lseaccum_ptr : params.softmax_lse_ptr) + row_offset_lseaccum),
                                    Shape<Int<kBlockM>>{}, Stride<_1>{});
-    // if (tidx == 0) { printf("row_offset_o = %d, bidh = %d, gOaccum = %p\n", row_offset_o, bidh, gOaccum.data()); }
+    if (tidx == 0) { printf("row_offset_o = %d, row_offset_oaccum = %d, bidh = %d, gOaccum = %p\n", row_offset_o, row_offset_oaccum, bidh, gOaccum.data()); }
 
     GmemTiledCopyO gmem_tiled_copy_Oaccum;
     auto gmem_thr_copy_Oaccum = gmem_tiled_copy_Oaccum.get_thread_slice(tidx);
@@ -1158,6 +1160,7 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
     flash::copy<Is_even_MN, Is_even_K, /*Clear_OOB_MN=*/false, /*Clear_OOB_K=*/false>(
         gmem_tiled_copy_Oaccum, tOrOaccum, tOgOaccum, tOcO, tOpO, binfo.actual_seqlen_q - m_block * kBlockM
     );
+    
     // __syncthreads();
     // if (cute::thread0()) { print(tOgOaccum); }
 }
@@ -1332,6 +1335,7 @@ inline __device__ void combine_attn_seqk_parallel(const Params &params) {
     // if (cute::thread0()) { print_tensor(tOrO); }
 
     Tensor rO = flash::convert_type<Element>(tOrO);
+    // TODO(scv119): This is messed up if q is varlen.
     // Write to gO
     #pragma unroll
     for (int m = 0; m < size<1>(rO); ++m) {

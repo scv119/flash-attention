@@ -24,6 +24,11 @@ struct BlockInfo {
         , pg_attn_block_batch_stride(params.pg_attn_block_tables_batch_stride)
         , pg_attn_cache_block_stride(params.pg_attn_cache_block_stride)
         {
+            if (cute::thread0()) {
+                printf(
+                    "init block info: bidb = %d, sum_s_q = %d, sum_s_k = %d, actual_seqlen_q = %d, seqlen_k_cache = %d, actual_seqlen_k = %d \n", 
+                    bidb, sum_s_q, sum_s_k, actual_seqlen_q, seqlen_k_cache, actual_seqlen_k);
+            } 
         }
 
     template <typename index_t>
@@ -45,9 +50,9 @@ struct BlockInfo {
         }
         auto pg_offset = cu_pg_attn_block_tables_ptr[bidb * pg_attn_block_batch_stride + block_id] * pg_attn_cache_block_stride;
 
-        // if (cute::thread0()) {
-        //     printf("original_offset = %d, pg_offset is = %d", original_offset, pg_offset);
-        // }
+        if (cute::thread0()) {
+            printf("original_offset = %d, pg_offset is = %d\n", original_offset, pg_offset);
+        }
         return pg_offset;
     }
 
@@ -59,14 +64,14 @@ struct BlockInfo {
         int offset = cu_pg_attn_block_tables_ptr[bidb * pg_attn_block_batch_stride + current_block_id - 1] * pg_attn_cache_block_stride - 
              cu_pg_attn_block_tables_ptr[bidb * pg_attn_block_batch_stride + current_block_id] * pg_attn_cache_block_stride;
 
-        // if (cute::thread0()) {
-        //     int origin_offset = -int(k_block_n * row_stride);
-        //     int index_prev = bidb * pg_attn_block_batch_stride + current_block_id - 1;
-        //     int index_now = bidb * pg_attn_block_batch_stride + current_block_id;
-        //     printf("index_prev = %d, index_now = %d, block_table_id_prev = %d, block_table_id_now = %d", 
-        //             index_prev, index_now, cu_pg_attn_block_tables_ptr[index_prev], cu_pg_attn_block_tables_ptr[index_now]);
-        //     printf("current block_id = %d, offset is = %d, origin_offset = %d\n", current_block_id, offset, origin_offset);
-        // }
+        if (cute::thread0()) {
+            int origin_offset = -int(k_block_n * row_stride);
+            int index_prev = bidb * pg_attn_block_batch_stride + current_block_id - 1;
+            int index_now = bidb * pg_attn_block_batch_stride + current_block_id;
+            printf("index_prev = %d, index_now = %d, block_table_id_prev = %d, block_table_id_now = %d", 
+                    index_prev, index_now, cu_pg_attn_block_tables_ptr[index_prev], cu_pg_attn_block_tables_ptr[index_now]);
+            printf("current block_id = %d, offset is = %d, origin_offset = %d\n", current_block_id, offset, origin_offset);
+        }
         return offset;
     }
 

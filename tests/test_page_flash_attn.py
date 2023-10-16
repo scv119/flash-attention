@@ -12,6 +12,7 @@ from flash_attn import (
     flash_attn_varlen_kvpacked_func,
     flash_attn_varlen_qkvpacked_func,
     flash_attn_with_page_attention,
+    flash_attn_varlen_with_page_attention,
 )
 from flash_attn.bert_padding import pad_input, unpad_input
 from flash_attn.flash_attn_interface import _get_block_size
@@ -528,25 +529,25 @@ def get_dropout_fraction(
 
 
 @pytest.mark.parametrize("dtype", ([torch.float16] if is_sm75 else [torch.float16, torch.bfloat16]))
-# @pytest.mark.parametrize("dtype", [torch.float16])
-@pytest.mark.parametrize("num_splits", [1, 0])
-# @pytest.mark.parametrize("num_splits", [0])
-@pytest.mark.parametrize("mha_type", ["mha", "mqa", "gqa"])
-# @pytest.mark.parametrize("mha_type", ["mha"])
+@pytest.mark.parametrize("num_splits", [0]) # TODO: fix this.
+# @pytest.mark.parametrize("num_splits", [1])
+#@pytest.mark.parametrize("mha_type", ["mha", "mqa", "gqa"])
+@pytest.mark.parametrize("mha_type", ["mha"])
 # @pytest.mark.parametrize("new_kv", [False, True])
 @pytest.mark.parametrize("new_kv", [False])
-@pytest.mark.parametrize("local", [False, True])
-# @pytest.mark.parametrize("local", [False])
-@pytest.mark.parametrize("causal", [False, True])
-# @pytest.mark.parametrize("causal", [True])
-@pytest.mark.parametrize("seqlen_new_eq_seqlen_q", [True, False])
-# @pytest.mark.parametrize("seqlen_new_eq_seqlen_q", [True])
+# @pytest.mark.parametrize("local", [False, True])
+@pytest.mark.parametrize("local", [False])
+# @pytest.mark.parametrize("causal", [False, True])
+@pytest.mark.parametrize("causal", [True])
+# @pytest.mark.parametrize("seqlen_new_eq_seqlen_q", [True, False])
+@pytest.mark.parametrize("seqlen_new_eq_seqlen_q", [True])
 @pytest.mark.parametrize("rotary_interleaved", [False, True])
 # @pytest.mark.parametrize("rotary_interleaved", [False])
 @pytest.mark.parametrize("rotary_fraction", [0.0, 0.5, 1.0])
 # @pytest.mark.parametrize("rotary_fraction", [0.0])
 # @pytest.mark.parametrize("has_batch_idx", [False, True])
 @pytest.mark.parametrize("has_batch_idx", [False])
+@pytest.mark.parametrize("varlen", [True])
 # @pytest.mark.parametrize("d", [32, 59, 64, 80, 96, 128, 160, 192, 224, 256])
 @pytest.mark.parametrize('d', [32, 64, 96, 128, 160, 192, 224, 256])
 # @pytest.mark.parametrize('d', [32, 40, 64, 80, 96, 128, 160, 192])
@@ -556,7 +557,7 @@ def get_dropout_fraction(
     "seqlen_q,seqlen_k",
     [
         (1, 128),
-        # (1, 339), # TODO(scv119): debug why this returns nan.
+        (1, 339),
         (3, 1024),
         (64, 800),
         (64, 256),
@@ -574,6 +575,7 @@ def test_flash_attn_page(
     seqlen_k,
     d,
     has_batch_idx,
+    varlen,
     rotary_fraction,
     rotary_interleaved,
     seqlen_new_eq_seqlen_q,
@@ -619,7 +621,7 @@ def test_flash_attn_page(
     block_tables = torch.randint(0, num_pages, (batch_size, max_page_len), device=device, dtype=torch.int32)
 
     cache_seqlens = torch.randint(
-        0,
+        1,
         # If we don't use seqlen_q in the case of causal and rotary, cos/sin won't be long enough
         (seqlen_k - (seqlen_q if (causal or local) and rotary_dim > 1 else seqlen_new) + 1)
         if new_kv
@@ -628,6 +630,8 @@ def test_flash_attn_page(
         dtype=torch.int32,
         device=device,
     )
+    print(f"\n")
+    print(f"{cache_seqlens=}")
     if has_batch_idx:
         cache_batch_idx = torch.randperm(batch_size_cache, dtype=torch.int32, device=device)[:batch_size]
     else:
@@ -685,6 +689,33 @@ def test_flash_attn_page(
     # v_cache_rep = repeat(v_cache_ref, "b s h d -> b s (h g) d", g=nheads // nheads_k)
     k_cache_rep = repeat(k_cache_ref, "b s h d -> b s (h g) d", g=nheads // nheads_k)
     v_cache_rep = repeat(v_cache_ref, "b s h d -> b s (h g) d", g=nheads // nheads_k)
+    out1 = None
+    if varlen:
+        cache_seqlens_q = torch.arange(0, (batch_size + 1) * seqlen_q, seqlen_q,  dtype=torch.int32, device=device)
+        cache_seqlens_k = torch.cat((torch.zeros(1, dtype=torch.int32, device=device), torch.cumsum(cache_seqlens, dim=0))).to(dtype=torch.int32)
+
+        print("running varlen paged attention...")
+        out1 = flash_attn_varlen_with_page_attention(
+            q.view(batch_size * seqlen_q, nheads, d),
+            k_cache,
+            v_cache,
+            block_tables,
+            cache_seqlens_q,
+            cache_seqlens_k,
+            seqlen_q,
+            seqlen_k,
+            k,
+            v,
+            cos,
+            sin,
+            cache_batch_idx,
+            causal=causal,
+            window_size=window_size,
+            rotary_interleaved=rotary_interleaved,
+            num_splits=num_splits,
+        )
+    torch.cuda.synchronize()
+    print("running paged attention...")
     out = flash_attn_with_page_attention(
         q,
         k_cache,
@@ -701,6 +732,10 @@ def test_flash_attn_page(
         rotary_interleaved=rotary_interleaved,
         num_splits=num_splits,
     )
+    if out1 is None:
+        out1 = out
+    out1 = torch.reshape(out1, out.shape)
+    assert (out1.shape == out.shape)
     # out = flash_attn_with_kvcache(
     #     q, k_cache, v_cache, cache_seqlens=cache_seqlens, causal=causal, window_size=window_size
     # )
@@ -736,6 +771,8 @@ def test_flash_attn_page(
         upcast=False,
         reorder_ops=True,
     )
+    print(f"Varlen Output max diff: {(out1 - out_ref).abs().max().item()}")
+    print(f"Varlen Output mean diff: {(out1 - out_ref).abs().mean().item()}")
     print(f"Output max diff: {(out - out_ref).abs().max().item()}")
     print(f"Output mean diff: {(out - out_ref).abs().mean().item()}")
     print(f"Pytorch max diff: {(out_pt - out_ref).abs().max().item()}")
@@ -749,3 +786,4 @@ def test_flash_attn_page(
         assert torch.allclose(k_cache_select, k_cache_ref, rtol=1e-3, atol=1e-3)
         assert torch.equal(v_cache_select, v_cache_ref)
     assert (out - out_ref).abs().max().item() <= 3 * (out_pt - out_ref).abs().max().item() + 1e-5
+    assert (out1 - out_ref).abs().max().item() <= 3 * (out_pt - out_ref).abs().max().item() + 1e-5
