@@ -529,16 +529,16 @@ def get_dropout_fraction(
 
 
 @pytest.mark.parametrize("dtype", ([torch.float16] if is_sm75 else [torch.float16, torch.bfloat16]))
-@pytest.mark.parametrize("num_splits", [0]) # TODO: fix this.
+@pytest.mark.parametrize("num_splits", [1, 0]) # TODO: fix this.
 # @pytest.mark.parametrize("num_splits", [1])
-#@pytest.mark.parametrize("mha_type", ["mha", "mqa", "gqa"])
-@pytest.mark.parametrize("mha_type", ["mha"])
+@pytest.mark.parametrize("mha_type", ["mha", "mqa", "gqa"])
+# @pytest.mark.parametrize("mha_type", ["mha"])
 # @pytest.mark.parametrize("new_kv", [False, True])
 @pytest.mark.parametrize("new_kv", [False])
-# @pytest.mark.parametrize("local", [False, True])
-@pytest.mark.parametrize("local", [False])
-# @pytest.mark.parametrize("causal", [False, True])
-@pytest.mark.parametrize("causal", [True])
+@pytest.mark.parametrize("local", [False, True])
+# @pytest.mark.parametrize("local", [False])
+@pytest.mark.parametrize("causal", [False, True])
+# @pytest.mark.parametrize("causal", [True])
 # @pytest.mark.parametrize("seqlen_new_eq_seqlen_q", [True, False])
 @pytest.mark.parametrize("seqlen_new_eq_seqlen_q", [True])
 @pytest.mark.parametrize("rotary_interleaved", [False, True])
@@ -695,6 +695,8 @@ def test_flash_attn_page(
         cache_seqlens_k = torch.cat((torch.zeros(1, dtype=torch.int32, device=device), torch.cumsum(cache_seqlens, dim=0))).to(dtype=torch.int32)
 
         print("running varlen paged attention...")
+        print(f"{cache_seqlens_q=}")
+        print(f"{cache_seqlens_k=}")
         out1 = flash_attn_varlen_with_page_attention(
             q.view(batch_size * seqlen_q, nheads, d),
             k_cache,
