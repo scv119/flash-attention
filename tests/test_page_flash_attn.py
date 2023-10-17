@@ -550,15 +550,16 @@ def get_dropout_fraction(
 @pytest.mark.parametrize("varlen", [True])
 # @pytest.mark.parametrize("d", [32, 59, 64, 80, 96, 128, 160, 192, 224, 256])
 # @pytest.mark.parametrize('d', [32, 64, 96, 128, 160, 192, 224, 256])
+@pytest.mark.parametrize('d', [32, 48, 64, 80, 96, 128, 160, 192, 224, 256])
 # @pytest.mark.parametrize('d', [32, 40, 64, 80, 96, 128, 160, 192])
 # @pytest.mark.parametrize('d', [56, 80])
-@pytest.mark.parametrize("d", [32])
+# @pytest.mark.parametrize("d", [32])
 @pytest.mark.parametrize(
     "seqlen_q,seqlen_k",
     [
-        # (1, 128),
-        # (1, 339),
-        # (3, 1024),
+        (1, 128),
+        (1, 339),
+        (3, 1024),
         (64, 800),
         (64, 256),
         (3, 799),
@@ -850,7 +851,8 @@ def test_flash_attn_page(
 # @pytest.mark.parametrize("has_batch_idx", [False, True])
 @pytest.mark.parametrize("has_batch_idx", [False])
 # @pytest.mark.parametrize("d", [32, 59, 64, 80, 96, 128, 160, 192, 224, 256])
-@pytest.mark.parametrize('d', [32, 64, 96, 128, 160, 192, 224, 256])
+#@pytest.mark.parametrize('d', [32, 64, 96, 128, 160, 192, 224, 256])
+@pytest.mark.parametrize('d', [32, 48, 64, 80, 96, 128, 160, 192, 224, 256])
 # @pytest.mark.parametrize('d', [32, 40, 64, 80, 96, 128, 160, 192])
 # @pytest.mark.parametrize('d', [56, 80])
 # @pytest.mark.parametrize("d", [32])
