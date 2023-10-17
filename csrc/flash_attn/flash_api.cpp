@@ -393,7 +393,7 @@ mha_fwd(at::Tensor &q,         // batch_size x seqlen_q x num_heads x head_size
         }
         TORCH_CHECK(params.num_splits <= 128, "num_splits > 128 not supported");
     }
-    printf("num_splits is: %d \n", params.num_splits);
+    // printf("num_splits is: %d \n", params.num_splits);
 
     // number of times random will be generated per thread, to offset philox counter in thc random
     // state
@@ -1513,7 +1513,7 @@ mha_fwd_pgcache(at::Tensor &q,                 // batch_size x seqlen_q x num_he
         params.softmax_lseaccum_ptr = softmax_lse_accum.data_ptr();
         params.oaccum_ptr = out_accum.data_ptr();
     }
-    printf("num_splits is %d \n", params.num_splits);
+    // printf("num_splits is %d \n", params.num_splits);
 
     auto stream = at::cuda::getCurrentCUDAStream().stream();
     // Only split kernel supports appending to KV cache, or indexing to the cache with cache_batch_idx
@@ -1747,7 +1747,7 @@ mha_varlen_fwd_pgcache(
     if (num_splits < 1) {
         params.num_splits = num_splits_heuristic(batch_size * num_heads * num_m_blocks, dprops->multiProcessorCount, num_n_blocks, 128);
     }
-    printf("num_splits is %d \n", params.num_splits);
+    // printf("num_splits is %d \n", params.num_splits);
     TORCH_CHECK(params.num_splits <= 128, "num_splits > 128 not supported");
     if (params.num_splits > 1) {
         at::Tensor softmax_lse_accum = torch::empty({params.num_splits, batch_size, num_heads, max_seqlen_q}, opts.dtype(at::kFloat));
