@@ -22,6 +22,12 @@
 #include <cutlass/numeric_conversion.h>
 #include <cutlass/numeric_types.h>
 
+#ifdef VERBOSE
+#define DEBUG_PRINT(...) if (cute::thread0()) { printf(__VA_ARGS__); }
+#else
+#define DEBUG_PRINT(...) do {} while (0)
+#endif
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 namespace flash {

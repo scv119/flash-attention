@@ -607,7 +607,7 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
     using ElementO = std::conditional_t<!Split, Element, ElementAccum>;
 
     const BlockInfo</*Varlen=*/!Is_even_MN> binfo(params, bidb);
-    if (threadIdx.x == 0 && blockIdx.y == 0 && blockIdx.z == 0) { printf("Is_even_MN = %d, Is_local=%d, is_cumulativ = %d, seqlen_k_cache = %d, actual_seqlen_k = %d\n", Is_even_MN, Is_local, params.is_seqlens_k_cumulative, binfo.seqlen_k_cache, binfo.actual_seqlen_k); }
+    DEBUG_PRINT("Is_even_MN = %d, Is_local=%d, is_cumulativ = %d, seqlen_k_cache = %d, actual_seqlen_k = %d\n", Is_even_MN, Is_local, params.is_seqlens_k_cumulative, binfo.seqlen_k_cache, binfo.actual_seqlen_k);
     // if (threadIdx.x == 0 && blockIdx.y == 1 && blockIdx.z == 0) { printf("params.knew_ptr = %p, seqlen_k_cache + seqlen_knew = %d\n", params.knew_ptr, binfo.seqlen_k_cache + (params.knew_ptr == nullptr ? 0 : params.seqlen_knew)); }
     if (m_block * kBlockM >= binfo.actual_seqlen_q) return;
 
@@ -620,9 +620,8 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
         n_block_max = std::min(n_block_max,
                                cute::ceil_div((m_block + 1) * kBlockM + binfo.actual_seqlen_k - binfo.actual_seqlen_q + params.window_size_right, kBlockN));
     }
-    if (threadIdx.x == 0 && blockIdx.y == 0 && blockIdx.z == 0) { 
-        printf("n_block_max = %d, n_split_idx = %d, n_blocks_per_split = %d\n", 
-            n_block_max, n_split_idx,n_blocks_per_split); }
+    DEBUG_PRINT("n_block_max = %d, n_split_idx = %d, n_blocks_per_split = %d\n", 
+            n_block_max, n_split_idx,n_blocks_per_split);
     if (n_block_min >= n_block_max) {  // This also covers the case where n_block_max <= 0
         // We exit early and write 0 to gOaccum and -inf to gLSEaccum.
         // Otherwise we might read OOB elements from gK and gV,
@@ -932,7 +931,7 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
         ? 1
         : ((Is_even_MN && Is_causal) ? cute::ceil_div(kBlockM, kBlockN) : cute::ceil_div(kBlockM, kBlockN) + 1);
     
-    if (cute::thread0()) { printf("n_masking_steps=%d, n_block=%d", n_masking_steps, n_block); }
+    DEBUG_PRINT("n_masking_steps=%d, n_block=%d", n_masking_steps, n_block);
     #pragma unroll
     for (int masking_step = 0; masking_step < n_masking_steps; ++masking_step, --n_block) {
         Tensor acc_s = partition_fragment_C(tiled_mma, Shape<Int<kBlockM>, Int<kBlockN>>{});  // (MMA=4, MMA_M, MMA_N)
@@ -970,7 +969,7 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
         // for rows outside actual_seqlen_k. So those rows could have Inf / NaN, and the matmul
         // can produce Inf / NaN.
         if (!Is_causal && !Is_local) {
-            if (cute::thread0()) { printf("applying non causal mask: actual_seqlen_k = %d, n_block = %d, kBlockN = %d\n", binfo.actual_seqlen_k, n_block, kBlockN); }
+            DEBUG_PRINT("applying non causal mask: actual_seqlen_k = %d, n_block = %d, kBlockN = %d\n", binfo.actual_seqlen_k, n_block, kBlockN);
             if (!Is_even_MN) { flash::apply_mask(scores, binfo.actual_seqlen_k - n_block * kBlockN); }
         } else {
             flash::apply_mask_local(scores, n_block * kBlockN, binfo.actual_seqlen_k,

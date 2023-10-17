@@ -1065,6 +1065,6 @@ def test_varlen_causal_flash_attn_page(
     print(f"out1 max diff: {(out1[0] - out2[-seqlen_q_1:, :, :]).abs().max().item()}")
     print(f"out1 mean diff: {(out1[0] - out2[-seqlen_q_1:, :, :]).abs().mean().item()}")
 
-    # assert torch.allclose(out0[0], out3[:seqlen_q_0, :, :], rtol=1e-03, atol=1e-04,)
+    #TODO(scv119): compare with torch implementation.
     assert torch.allclose(out0[0], out2[:seqlen_q_0, :, :], rtol=1e-03, atol=1e-03,)
     assert torch.allclose(out1[0], out2[-seqlen_q_1:, :, :], rtol=1e-03, atol=1e-03,)
