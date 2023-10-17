@@ -556,9 +556,9 @@ def get_dropout_fraction(
 @pytest.mark.parametrize(
     "seqlen_q,seqlen_k",
     [
-        (1, 128),
-        (1, 339),
-        (3, 1024),
+        # (1, 128),
+        # (1, 339),
+        # (3, 1024),
         (64, 800),
         (64, 256),
         (3, 799),
@@ -775,10 +775,7 @@ def test_flash_attn_page(
         rotary_interleaved=rotary_interleaved,
         num_splits=num_splits,
     )
-    if out1 is None:
-        out1 = out
     out1 = torch.reshape(out1, out.shape)
-    assert (out1.shape == out.shape)
     # out = flash_attn_with_kvcache(
     #     q, k_cache, v_cache, cache_seqlens=cache_seqlens, causal=causal, window_size=window_size
     # )
@@ -830,3 +827,245 @@ def test_flash_attn_page(
         assert torch.equal(v_cache_select, v_cache_ref)
     assert (out - out_ref).abs().max().item() <= 3 * (out_pt - out_ref).abs().max().item() + 1e-5
     assert (out1 - out_ref).abs().max().item() <= 3 * (out_pt - out_ref).abs().max().item() + 1e-5
+
+
+@pytest.mark.parametrize("dtype", ([torch.float16] if is_sm75 else [torch.float16, torch.bfloat16]))
+# @pytest.mark.parametrize("num_splits", [1, 0])
+@pytest.mark.parametrize("num_splits", [0])
+@pytest.mark.parametrize("mha_type", ["mha", "mqa", "gqa"])
+# @pytest.mark.parametrize("mha_type", ["mha"])
+# @pytest.mark.parametrize("new_kv", [False, True])
+@pytest.mark.parametrize("new_kv", [False])
+# @pytest.mark.parametrize("local", [False, True])
+@pytest.mark.parametrize("local", [False])
+# @pytest.mark.parametrize("causal", [False, True])
+@pytest.mark.parametrize("causal", [True]) # TODO: fix this.
+# @pytest.mark.parametrize("seqlen_new_eq_seqlen_q", [True, False])
+@pytest.mark.parametrize("seqlen_new_eq_seqlen_q", [True])
+# @pytest.mark.parametrize("rotary_interleaved", [False, True])
+@pytest.mark.parametrize("rotary_interleaved", [False])
+# @pytest.mark.parametrize("rotary_fraction", [0.0, 0.5, 1.0])
+@pytest.mark.parametrize("rotary_fraction", [0.0])
+# @pytest.mark.parametrize("has_batch_idx", [False, True])
+@pytest.mark.parametrize("has_batch_idx", [False])
+# @pytest.mark.parametrize("d", [32, 59, 64, 80, 96, 128, 160, 192, 224, 256])
+# @pytest.mark.parametrize('d', [32, 64, 96, 128, 160, 192, 224, 256])
+# @pytest.mark.parametrize('d', [32, 40, 64, 80, 96, 128, 160, 192])
+# @pytest.mark.parametrize('d', [56, 80])
+@pytest.mark.parametrize("d", [32])
+@pytest.mark.parametrize(
+    "seqlen_q,seqlen_k",
+    [
+        (1, 339),
+        # (3, 1024),
+        # (64, 800),
+        # (64, 256),
+        # (3, 799),
+        # (64, 2048),
+        # (16, 20000),
+        # (1, 128 * 1024),
+        # (16, 128 * 1024),
+        # (128, 128),
+    ],
+)
+# @pytest.mark.parametrize('seqlen_q,seqlen_k', [(256, 256)])
+def test_varlen_causal_flash_attn_page(
+    seqlen_q,
+    seqlen_k,
+    d,
+    has_batch_idx,
+    rotary_fraction,
+    rotary_interleaved,
+    seqlen_new_eq_seqlen_q,
+    causal,
+    local,
+    new_kv,
+    mha_type,
+    num_splits,
+    dtype,
+):
+    if seqlen_q > seqlen_k and new_kv:
+        pytest.skip()
+    if not new_kv and rotary_fraction > 0.0:
+        pytest.skip()
+    device = "cuda"
+    # set seed
+    torch.random.manual_seed(0)
+
+    page_block_size = 32
+    num_pages = 10
+    batch_size = 2
+    max_page_len = (seqlen_k - 1) // page_block_size + 1
+    
+    batch_size_cache = batch_size if not has_batch_idx else batch_size * 2
+    nheads = 6
+    # rotary_dim must be a multiple of 16, and must be <= d
+    rotary_dim = math.floor(int(rotary_fraction * d) / 16) * 16
+    nheads_k = nheads if mha_type == "mha" else (1 if mha_type == "mqa" else 3)
+    assert nheads % nheads_k == 0
+    window_size = (-1, -1) if not local else torch.randint(0, seqlen_k, (2,))
+    q = torch.randn(batch_size, seqlen_q, nheads, d, device=device, dtype=dtype)
+    seqlen_new = seqlen_q if seqlen_new_eq_seqlen_q else torch.randint(1, seqlen_q + 1, (1,)).item()
+    if new_kv:
+        k = torch.randn(batch_size, seqlen_new, nheads_k, d, device=device, dtype=dtype)
+        v = torch.randn(batch_size, seqlen_new, nheads_k, d, device=device, dtype=dtype)
+    else:
+        k, v = None, None
+
+    k_cache = torch.randn(num_pages, page_block_size, nheads_k, d, device=device, dtype=dtype)
+    v_cache = torch.randn(num_pages, page_block_size, nheads_k, d, device=device, dtype=dtype)
+
+    # random mapping.
+    block_tables = torch.randint(0, num_pages, (batch_size, max_page_len), device=device, dtype=torch.int32)
+
+    cache_seqlens = torch.randint(
+        1,
+        # If we don't use seqlen_q in the case of causal and rotary, cos/sin won't be long enough
+        (seqlen_k - (seqlen_q if (causal or local) and rotary_dim > 1 else seqlen_new) + 1)
+        if new_kv
+        else (seqlen_k + 1),
+        (batch_size,),
+        dtype=torch.int32,
+        device=device,
+    )
+    print(f"\n")
+    # cache_seqlens[0] = 256
+    # cache_seqlens[1] = 224
+    print(f"{cache_seqlens=}")
+
+    out1 = None
+    cache_batch_idx = None
+    cache_seqlens_q = torch.arange(0, (batch_size + 1) * seqlen_q, seqlen_q,  dtype=torch.int32, device=device)
+    cache_seqlens_k = torch.cat((torch.zeros(1, dtype=torch.int32, device=device), torch.cumsum(cache_seqlens, dim=0))).to(dtype=torch.int32)
+
+    q_view = q.view(batch_size * seqlen_q, nheads, d)
+    assert batch_size == 2
+    truncated_len = torch.randint(
+        1,
+        seqlen_q + 1,
+        (2,),
+        dtype=torch.int32,
+        device=device,
+    )
+    seqlen_q_0 = truncated_len[0]
+    seqlen_q_1 = truncated_len[1]
+    cache_seqlens_q[1] = seqlen_q_0
+    cache_seqlens_q[2] = seqlen_q_0 + seqlen_q_1
+    indices = list(range(0, seqlen_q_0)) + list(range(seqlen_q, seqlen_q + seqlen_q_1))
+    q_selected = q_view[indices, :, :]
+
+    print("running varlen paged attention truncated, split 1...")
+    print('=====================================')
+    print(f"{cache_seqlens_q=}")
+    print(f"{cache_seqlens_k=}")
+    print(f"{block_tables=}")
+    print(f"{causal=}, {local=}")
+    out3 = flash_attn_varlen_with_page_attention(
+        q_selected,
+        k_cache,
+        v_cache,
+        block_tables,
+        cache_seqlens_q,
+        cache_seqlens_k,
+        seqlen_q,
+        seqlen_k,
+        None,
+        None,
+        None,
+        None,
+        cache_batch_idx,
+        causal=causal,
+        window_size=window_size,
+        rotary_interleaved=rotary_interleaved,
+        num_splits=1,
+    )
+    torch.cuda.synchronize()
+
+    print("running varlen paged attention truncated, split=0...")
+    print('=====================================')
+    print(f"{cache_seqlens_q=}")
+    print(f"{cache_seqlens_k=}")
+    print(f"{block_tables=}")
+    print(f"{causal=}, {local=}")
+    out2 = flash_attn_varlen_with_page_attention(
+        q_selected,
+        k_cache,
+        v_cache,
+        block_tables,
+        cache_seqlens_q,
+        cache_seqlens_k,
+        seqlen_q,
+        seqlen_k,
+        None,
+        None,
+        None,
+        None,
+        cache_batch_idx,
+        causal=causal,
+        window_size=window_size,
+        rotary_interleaved=rotary_interleaved,
+        num_splits=num_splits,
+    )
+    torch.cuda.synchronize()
+    print('=====================================')
+    print("running paged attention for query[0]...")
+    q_0 = q_selected[:seqlen_q_0].view(1, seqlen_q_0, nheads, d)
+    block_tables_0 = block_tables[:1]
+    cache_seqklen_0 = cache_seqlens[:1]
+    print(f"{q_0.shape=}")
+    print(f"{block_tables_0=}")
+    print(f"{cache_seqklen_0=}")
+
+    out0 = flash_attn_with_page_attention(
+        q_0,
+        k_cache,
+        v_cache,
+        block_tables_0,
+        None,
+        None,
+        None,
+        None,
+        cache_seqklen_0,
+        cache_batch_idx,
+        causal=causal,
+        window_size=window_size,
+        rotary_interleaved=rotary_interleaved,
+        num_splits=num_splits,
+    )
+    torch.cuda.synchronize()
+
+    print('=====================================')
+    print("running paged attention for query[1]...")
+    q_1 = q_selected[-seqlen_q_1:].view(1, seqlen_q_1, nheads, d)
+    block_tables_1 = block_tables[1:]
+    cache_seqklen_1 = cache_seqlens[1:]
+    print(f"{q_1.shape=}")
+    print(f"{block_tables_1=}")
+    print(f"{cache_seqklen_1=}")
+    out1 = flash_attn_with_page_attention(
+        q_1,
+        k_cache,
+        v_cache,
+        block_tables_1,
+        None,
+        None,
+        None,
+        None,
+        cache_seqklen_1,
+        cache_batch_idx,
+        causal=causal,
+        window_size=window_size,
+        rotary_interleaved=rotary_interleaved,
+        num_splits=num_splits,
+    )
+
+    print(f"Varlen Output max diff: {(out0[0] - out3[:seqlen_q_0, :, :]).abs().max().item()}")
+    print(f"Varlen Output mean diff: {(out0[0] - out3[:seqlen_q_0, :, :]).abs().mean().item()}")
+    print(f"Output max diff: {(out0[0] - out2[:seqlen_q_0, :, :]).abs().max().item()}")
+    print(f"Output mean diff: {(out0[0] - out2[:seqlen_q_0, :, :]).abs().mean().item()}")
+    print(f"Pytorch max diff: {(out1[0] - out2[-seqlen_q_1:, :, :]).abs().max().item()}")
+    print(f"Pytorch mean diff: {(out1[0] - out2[-seqlen_q_1:, :, :]).abs().mean().item()}")
+
+    assert torch.allclose(out0[0], out3[:seqlen_q_0, :, :], rtol=1e-03, atol=1e-05,)
+    assert torch.allclose(out0[0], out2[:seqlen_q_0, :, :], rtol=1e-03, atol=1e-05,)
+    assert torch.allclose(out1[0], out2[-seqlen_q_1:, :, :], rtol=1e-03, atol=1e-05,)

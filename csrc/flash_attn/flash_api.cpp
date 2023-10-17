@@ -1513,7 +1513,7 @@ mha_fwd_pgcache(at::Tensor &q,                 // batch_size x seqlen_q x num_he
         params.softmax_lseaccum_ptr = softmax_lse_accum.data_ptr();
         params.oaccum_ptr = out_accum.data_ptr();
     }
-    // printf("num_splits is %d \n", params.num_splits);
+    printf("num_splits is %d \n", params.num_splits);
 
     auto stream = at::cuda::getCurrentCUDAStream().stream();
     // Only split kernel supports appending to KV cache, or indexing to the cache with cache_batch_idx
