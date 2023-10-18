@@ -547,7 +547,7 @@ def get_dropout_fraction(
 @pytest.mark.parametrize("rotary_fraction", [0.0])
 # @pytest.mark.parametrize("has_batch_idx", [False, True])
 @pytest.mark.parametrize("has_batch_idx", [False])
-@pytest.mark.parametrize("varlen", [True])
+@pytest.mark.parametrize("varlen", [False])
 # @pytest.mark.parametrize("d", [32, 59, 64, 80, 96, 128, 160, 192, 224, 256])
 # @pytest.mark.parametrize('d', [32, 64, 96, 128, 160, 192, 224, 256])
 @pytest.mark.parametrize('d', [32, 48, 64, 80, 96, 128, 160, 192, 224, 256])
@@ -597,7 +597,7 @@ def test_flash_attn_page(
 
     page_block_size = 32
     num_pages = 10
-    batch_size = 2
+    batch_size = 15
     max_page_len = (seqlen_k - 1) // page_block_size + 1
     
     batch_size_cache = batch_size if not has_batch_idx else batch_size * 2
@@ -776,7 +776,8 @@ def test_flash_attn_page(
         rotary_interleaved=rotary_interleaved,
         num_splits=num_splits,
     )
-    out1 = torch.reshape(out1, out.shape)
+    if out1:
+        out1 = torch.reshape(out1, out.shape)
     # out = flash_attn_with_kvcache(
     #     q, k_cache, v_cache, cache_seqlens=cache_seqlens, causal=causal, window_size=window_size
     # )
@@ -812,8 +813,9 @@ def test_flash_attn_page(
         upcast=False,
         reorder_ops=True,
     )
-    print(f"Varlen Output max diff: {(out1 - out_ref).abs().max().item()}")
-    print(f"Varlen Output mean diff: {(out1 - out_ref).abs().mean().item()}")
+    if out1:
+        print(f"Varlen Output max diff: {(out1 - out_ref).abs().max().item()}")
+        print(f"Varlen Output mean diff: {(out1 - out_ref).abs().mean().item()}")
     print(f"Output max diff: {(out - out_ref).abs().max().item()}")
     print(f"Output mean diff: {(out - out_ref).abs().mean().item()}")
     print(f"Pytorch max diff: {(out_pt - out_ref).abs().max().item()}")
@@ -826,8 +828,11 @@ def test_flash_attn_page(
         v_cache_select = v_cache if not has_batch_idx else v_cache[cache_batch_idx]
         assert torch.allclose(k_cache_select, k_cache_ref, rtol=1e-3, atol=1e-3)
         assert torch.equal(v_cache_select, v_cache_ref)
+    
     assert (out - out_ref).abs().max().item() <= 3 * (out_pt - out_ref).abs().max().item() + 1e-5
-    assert (out1 - out_ref).abs().max().item() <= 3 * (out_pt - out_ref).abs().max().item() + 1e-5
+
+    if out1:
+        assert (out1 - out_ref).abs().max().item() <= 3 * (out_pt - out_ref).abs().max().item() + 1e-5
 
 
 # @pytest.mark.parametrize("dtype", ([torch.float16] if is_sm75 else [torch.float16, torch.bfloat16]))

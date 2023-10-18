@@ -76,6 +76,11 @@ void run_flash_splitkv_fwd(Flash_fwd_params &params, cudaStream_t stream) {
     dim3 grid(num_m_block, params.num_splits > 1 ? params.num_splits : params.b, params.num_splits > 1 ? params.b * params.h : params.h);
     const bool is_even_MN = params.cu_seqlens_q == nullptr && params.cu_seqlens_k == nullptr && params.seqlen_k % Kernel_traits::kBlockN == 0 && params.seqlen_q % Kernel_traits::kBlockM == 0;
     const bool is_even_K = params.d == Kernel_traits::kHeadDim;
+    // printf("number of splits: %d \n", params.num_splits);
+    // printf("Grid : {%d, %d, %d} blocks. \n",
+    //     grid.x, grid.y, grid.z);
+    // printf("Params: {b: %d, h: %d}. \n",
+    //      params.b, params.h);
     BOOL_SWITCH(params.is_causal, Is_causal, [&] {
         BOOL_SWITCH(is_even_MN, IsEvenMNConst, [&] {
             BOOL_SWITCH(is_even_K, IsEvenKConst, [&] {
