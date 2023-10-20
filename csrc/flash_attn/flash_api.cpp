@@ -201,8 +201,10 @@ void run_mha_fwd(Flash_fwd_params &params, cudaStream_t stream, bool force_split
         FWD_HEADDIM_SWITCH(params.d, [&] {
             if (params.num_splits <= 1 && !force_split_kernel) {  // If we don't set it num_splits == 0
                 TORCH_CHECK(false, "should use splitkv_dispatch");
+                printf("c-SANG-TOO mha\n");
                 run_mha_fwd_<elem_type, kHeadDim>(params, stream);
             } else {
+                printf("c-SANG-TODO mha split kv\n");
                 run_mha_fwd_splitkv_dispatch<elem_type, kHeadDim>(params, stream);
             }
         });
@@ -1563,7 +1565,6 @@ mha_varlen_fwd_pgcache(
                 bool is_rotary_interleaved,   // if true, rotary combines indices 0 & 1, else indices 0 & rotary_dim / 2
                 int num_splits
                 ) {
-
     auto dprops = at::cuda::getCurrentDeviceProperties();
     // bool is_sm75 = dprops->major == 7 && dprops->minor == 5;
     bool is_sm8x = dprops->major == 8 && dprops->minor >= 0;
@@ -1762,6 +1763,7 @@ mha_varlen_fwd_pgcache(
     run_mha_fwd(params, stream, /*force_split_kernel=*/true);
 
     if (head_size_og % 8 != 0) {
+        printf("c-SANG-TODO copy operation here\n");
         out = out.index({"...", torch::indexing::Slice(torch::indexing::None, head_size_og)});
         // if (k_.has_value()) {
         //     TORCH_CHECK(false, "rotary cos/sin not supported for pgcache");

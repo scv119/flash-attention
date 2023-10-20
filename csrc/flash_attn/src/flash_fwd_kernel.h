@@ -608,7 +608,7 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
 
     const BlockInfo</*Varlen=*/!Is_even_MN> binfo(params, bidb);
     DEBUG_PRINT("Is_even_MN = %d, Is_local=%d, is_cumulativ = %d, seqlen_k_cache = %d, actual_seqlen_k = %d\n", Is_even_MN, Is_local, params.is_seqlens_k_cumulative, binfo.seqlen_k_cache, binfo.actual_seqlen_k);
-    // if (threadIdx.x == 0 && blockIdx.y == 1 && blockIdx.z == 0) { printf("params.knew_ptr = %p, seqlen_k_cache + seqlen_knew = %d\n", params.knew_ptr, binfo.seqlen_k_cache + (params.knew_ptr == nullptr ? 0 : params.seqlen_knew)); }
+    if (threadIdx.x == 0 && blockIdx.y == 1 && blockIdx.z == 0) { printf("SANG-TODO params.knew_ptr = %p, seqlen_k_cache + seqlen_knew = %d\n", params.knew_ptr, binfo.seqlen_k_cache + (params.knew_ptr == nullptr ? 0 : params.seqlen_knew)); }
     if (m_block * kBlockM >= binfo.actual_seqlen_q) return;
 
     const int n_blocks_per_split = ((params.seqlen_k + kBlockN - 1) / kBlockN + num_n_splits - 1) / num_n_splits;
@@ -804,20 +804,25 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
         // if (cute::thread(8, 0)) { print_tensor(gCos); }
         // if (cute::thread(0, 0)) { print_tensor(tRgCos); }
 
-        const index_t row_offset_knew = binfo.k_offset(params.knew_batch_stride, params.knew_row_stride, bidb)
-            + ((n_block_max - 1) * kBlockN) * params.knew_row_stride + (bidh / params.h_h_k_ratio) * params.knew_head_stride;
-        const index_t row_offset_vnew = binfo.k_offset(params.vnew_batch_stride, params.vnew_row_stride, bidb)
-            + ((n_block_max - 1) * kBlockN) * params.vnew_row_stride + (bidh / params.h_h_k_ratio) * params.vnew_head_stride;
+        // const index_t row_offset_knew = binfo.k_offset(params.knew_batch_stride, params.knew_row_stride, bidb)
+        //     + ((n_block_max - 1) * kBlockN) * params.knew_row_stride + (bidh / params.h_h_k_ratio) * params.knew_head_stride;
+        // const index_t row_offset_vnew = binfo.k_offset(params.vnew_batch_stride, params.vnew_row_stride, bidb)
+        //     + ((n_block_max - 1) * kBlockN) * params.vnew_row_stride + (bidh / params.h_h_k_ratio) * params.vnew_head_stride;
+        const index_t row_offset_knew = binfo.k_offset_pg(params.k_batch_stride, params.k_row_stride, bidb_cache, n_block_max - 1, kBlockN)
+            + (bidh / params.h_h_k_ratio) * params.k_head_stride;
+        const index_t row_offset_vnew = binfo.k_offset_pg(params.v_batch_stride, params.v_row_stride, bidb_cache, n_block_max - 1, kBlockN)
+            + (bidh / params.h_h_k_ratio) * params.v_head_stride;
+
         // Subtract seqlen_k_cache * row stride so that conceptually gK and gKnew "line up". When we access them,
         // e.g. if gK has 128 rows and gKnew has 64 rows, we access gK[:128] and gKNew[128:128 + 64].
         // This maps to accessing the first 64 rows of knew_ptr.
         Tensor gKnew = make_tensor(make_gmem_ptr(reinterpret_cast<Element *>(params.knew_ptr)
-                                                + row_offset_knew - binfo.seqlen_k_cache * params.knew_row_stride),
+                                                + row_offset_knew),
                                   Shape<Int<kBlockN>, Int<kHeadDim>>{},
                                   make_stride(params.knew_row_stride, _1{}));
-        // if (threadIdx.x == 0 && blockIdx.y == 0 && blockIdx.z == 0) { printf("knew_ptr = %p, row_offset_knew = %d, gKnew_ptr = %p\n", params.knew_ptr, row_offset_knew, gKnew.data()); }
+        if (threadIdx.x == 0 && blockIdx.y == 0 && blockIdx.z == 0) { printf("knew_ptr = %p, row_offset_knew = %d, gKnew_ptr = %p\n", params.knew_ptr, row_offset_knew, gKnew.data()); }
         Tensor gVnew = make_tensor(make_gmem_ptr(reinterpret_cast<Element *>(params.vnew_ptr)
-                                                + row_offset_vnew - binfo.seqlen_k_cache * params.vnew_row_stride),
+                                                + row_offset_vnew),
                                   Shape<Int<kBlockN>, Int<kHeadDim>>{},
                                   make_stride(params.vnew_row_stride, _1{}));
         Tensor tKgKnew = gmem_thr_copy_QKV.partition_S(gKnew);  // (KCPY, KCPY_N, KCPY_K)
@@ -828,8 +833,8 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
             flash::copy_w_min_idx<Is_even_K>(
                 tVgVnew, tVgV, tKVcKV, tKVpKV, binfo.actual_seqlen_k - n_block * kBlockN, binfo.seqlen_k_cache - n_block * kBlockN
             );
-            tVgV.data() = tVgV.data() + (-int(kBlockN * params.v_row_stride));
-            tVgVnew.data() = tVgVnew.data() + (-int(kBlockN * params.vnew_row_stride));
+            tVgV.data() = tVgV.data() + binfo.k_advance_offset_pg(bidb_cache, n_block, params.v_row_stride, kBlockN);
+            tVgVnew.data() = tVgVnew.data() + binfo.k_advance_offset_pg(bidb_cache, n_block, params.v_row_stride, kBlockN);
             if (params.rotary_dim == 0) {
                 flash::copy_w_min_idx<Is_even_K>(
                     tKgKnew, tKgK, tKVcKV, tKVpKV, binfo.actual_seqlen_k - n_block * kBlockN, binfo.seqlen_k_cache - n_block * kBlockN
@@ -854,14 +859,15 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
 
                 }
             }
-            tKgK.data() = tKgK.data() + (-int(kBlockN * params.k_row_stride));
-            tKgKnew.data() = tKgKnew.data() + (-int(kBlockN * params.knew_row_stride));
+            tKgK.data() = tKgK.data() + binfo.k_advance_offset_pg(bidb_cache, n_block, params.k_row_stride, kBlockN);
+            tKgKnew.data() = tKgKnew.data() + binfo.k_advance_offset_pg(bidb_cache, n_block, params.v_row_stride, kBlockN);
         }
         // Need this before we can read in K again, so that we'll see the updated K values.
         __syncthreads();
         if (n_block_max > n_block_copy_min) {
-            tKgK.data() = tKgK.data() + (n_block_max - n_block_copy_min) * kBlockN * params.k_row_stride;
-            tVgV.data() = tVgV.data() + (n_block_max - n_block_copy_min) * kBlockN * params.v_row_stride;
+            assert(false);
+            // tKgK.data() = tKgK.data() + (n_block_max - n_block_copy_min) * kBlockN * params.k_row_stride;
+            // tVgV.data() = tVgV.data() + (n_block_max - n_block_copy_min) * kBlockN * params.v_row_stride;
         }
     }
 

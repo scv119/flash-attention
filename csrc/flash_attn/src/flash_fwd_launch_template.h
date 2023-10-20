@@ -85,6 +85,7 @@ void run_flash_splitkv_fwd(Flash_fwd_params &params, cudaStream_t stream) {
                             // If Append_KV, then we must have seqlen_offsets, which means cu_seqlens_k != nullptr.
                             // If not IsEvenKConst, we also set IsEvenMNConst to false to reduce number of templates.
                             // If Is_local, set Is_causal to false
+                            printf("c-SANG-TODO run_flash_splitkv_fwd, append_kv: %d\n", Append_KV);
                             auto kernel = &flash_fwd_splitkv_kernel<Kernel_traits, Is_causal && !Is_local, Is_local, IsEvenMNConst && !Append_KV && IsEvenKConst && !Is_local && Kernel_traits::kHeadDim <= 128, IsEvenKConst, Split, Append_KV>;
                             // auto kernel = &flash_fwd_splitkv_kernel<Kernel_traits, Is_causal, false, true, Split, Append_KV>;
                             // auto kernel = &flash_fwd_splitkv_kernel<Kernel_traits, Is_causal, false, IsEvenKConst>;
@@ -137,6 +138,7 @@ void run_mha_fwd_splitkv_dispatch(Flash_fwd_params &params, cudaStream_t stream)
 
     // TD: force flash attention block-size matches page block size.
     constexpr static int kBlockN = 32;
+    printf("c-SANG-TODO run_mha_fwd_splitkv_dispatch\n");
     run_flash_splitkv_fwd<Flash_fwd_kernel_traits<Headdim, kBlockM, kBlockN, 4, false, false, T>>(params, stream);
 }
 

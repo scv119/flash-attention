@@ -95,7 +95,6 @@ ext_modules = []
 # We want this even if SKIP_CUDA_BUILD because when we run python setup.py sdist we want the .hpp
 # files included in the source distribution, in case the user compiles from source.
 subprocess.run(["git", "submodule", "update", "--init", "csrc/cutlass"])
-
 if not SKIP_CUDA_BUILD:
     print("\n\ntorch.__version__  = {}\n\n".format(torch.__version__))
     TORCH_MAJOR = int(torch.__version__.split(".")[0])

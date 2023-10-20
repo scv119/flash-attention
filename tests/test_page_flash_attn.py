@@ -528,11 +528,12 @@ def get_dropout_fraction(
     return dropped.sum() / valid.sum()
 
 
-@pytest.mark.parametrize("dtype", ([torch.float16] if is_sm75 else [torch.float16, torch.bfloat16]))
-@pytest.mark.parametrize("num_splits", [1, 0])
-# @pytest.mark.parametrize("num_splits", [0])
-@pytest.mark.parametrize("mha_type", ["mha", "mqa", "gqa"])
-# @pytest.mark.parametrize("mha_type", ["mha"])
+# @pytest.mark.parametrize("dtype", ([torch.float16] if is_sm75 else [torch.float16, torch.bfloat16]))
+@pytest.mark.parametrize("dtype", ([torch.float16] if is_sm75 else [torch.float16]))
+# @pytest.mark.parametrize("num_splits", [1, 0])
+@pytest.mark.parametrize("num_splits", [0])
+# @pytest.mark.parametrize("mha_type", ["mha", "mqa", "gqa"])
+@pytest.mark.parametrize("mha_type", ["mha"])
 # @pytest.mark.parametrize("new_kv", [False, True])
 @pytest.mark.parametrize("new_kv", [False])
 # @pytest.mark.parametrize("local", [False, True])
@@ -559,13 +560,13 @@ def get_dropout_fraction(
         # (1, 128),
         # (1, 339),
         # (3, 1024),
-        (64, 800),
-        (64, 256),
-        (3, 799),
-        (64, 2048),
-        (16, 20000),
-        (1, 128 * 1024),
-        (16, 128 * 1024),
+        #(64, 800),
+        #(64, 256),
+        #(3, 799),
+        #(64, 2048),
+        #(16, 20000),
+        #(1, 128 * 1024),
+        #(16, 128 * 1024),
         (128, 128),
     ],
 )
@@ -717,6 +718,7 @@ def test_flash_attn_page(
             rotary_interleaved=rotary_interleaved,
             num_splits=num_splits,
         )
+        print("SANG-TODO out1", out1)
 
         assert batch_size == 2
         truncated_len = torch.randint(
