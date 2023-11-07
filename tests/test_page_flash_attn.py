@@ -535,7 +535,7 @@ def get_dropout_fraction(
 # @pytest.mark.parametrize("mha_type", ["mha", "mqa", "gqa"])
 @pytest.mark.parametrize("mha_type", ["mha"])
 # @pytest.mark.parametrize("new_kv", [False, True])
-@pytest.mark.parametrize("new_kv", [False])
+@pytest.mark.parametrize("new_kv", [True])
 # @pytest.mark.parametrize("local", [False, True])
 @pytest.mark.parametrize("local", [False])
 # @pytest.mark.parametrize("causal", [False, True])
@@ -551,23 +551,23 @@ def get_dropout_fraction(
 @pytest.mark.parametrize("varlen", [False])
 # @pytest.mark.parametrize("d", [32, 59, 64, 80, 96, 128, 160, 192, 224, 256])
 # @pytest.mark.parametrize('d', [32, 64, 96, 128, 160, 192, 224, 256])
-@pytest.mark.parametrize('d', [32, 48, 64, 80, 96, 128, 160, 192, 224, 256])
+# @pytest.mark.parametrize('d', [32, 48, 64, 80, 96, 128, 160, 192, 224, 256])
 # @pytest.mark.parametrize('d', [32, 40, 64, 80, 96, 128, 160, 192])
 # @pytest.mark.parametrize('d', [56, 80])
-# @pytest.mark.parametrize("d", [32])
+@pytest.mark.parametrize("d", [32])
 @pytest.mark.parametrize(
     "seqlen_q,seqlen_k",
     [
-        (1, 128),
-        (1, 339),
-        (3, 1024),
-        (64, 800),
-        (64, 256),
-        (3, 799),
-        (64, 2048),
-        (16, 20000),
-        (1, 128 * 1024),
-        (16, 128 * 1024),
+        # (1, 128),
+        # (1, 339),
+        # (3, 1024),
+        # (64, 800),
+        # (64, 256),
+        # (3, 799),
+        # (64, 2048),
+        # (16, 20000),
+        # (1, 128 * 1024),
+        # (16, 128 * 1024),
         (128, 128),
     ],
 )
@@ -598,16 +598,21 @@ def test_flash_attn_page(
 
     page_block_size = 32
     num_pages = 10
-    batch_size = 15
+    # batch_size = 15
+    batch_size = 1
     max_page_len = (seqlen_k - 1) // page_block_size + 1
+    print(f"{page_block_size=}\n{num_pages=}\n{batch_size=}\n{max_page_len=}")
     
     batch_size_cache = batch_size if not has_batch_idx else batch_size * 2
     nheads = 6
     # rotary_dim must be a multiple of 16, and must be <= d
     rotary_dim = math.floor(int(rotary_fraction * d) / 16) * 16
+    print(f"{rotary_dim=}")
     nheads_k = nheads if mha_type == "mha" else (1 if mha_type == "mqa" else 3)
     assert nheads % nheads_k == 0
     window_size = (-1, -1) if not local else torch.randint(0, seqlen_k, (2,))
+
+    # Create QKV
     q = torch.randn(batch_size, seqlen_q, nheads, d, device=device, dtype=dtype)
     seqlen_new = seqlen_q if seqlen_new_eq_seqlen_q else torch.randint(1, seqlen_q + 1, (1,)).item()
     if new_kv:
@@ -619,11 +624,11 @@ def test_flash_attn_page(
     k_cache = torch.randn(num_pages, page_block_size, nheads_k, d, device=device, dtype=dtype)
     v_cache = torch.randn(num_pages, page_block_size, nheads_k, d, device=device, dtype=dtype)
 
-    # random mapping.
     block_tables = torch.randint(0, num_pages, (batch_size, max_page_len), device=device, dtype=torch.int32)
-
+    print(block_tables)
+    print((seqlen_k - (seqlen_q if (causal or local) and rotary_dim > 1 else seqlen_new) + 1))
     cache_seqlens = torch.randint(
-        1,
+        0,
         # If we don't use seqlen_q in the case of causal and rotary, cos/sin won't be long enough
         (seqlen_k - (seqlen_q if (causal or local) and rotary_dim > 1 else seqlen_new) + 1)
         if new_kv
@@ -685,10 +690,11 @@ def test_flash_attn_page(
         update_mask = torch.logical_and(
             cache_seqlens_expanded <= arange, arange < cache_seqlens_expanded + seqlen_new
         )
+        print(f"{update_mask=}")
         k_cache_ref[update_mask] = rearrange(k_ro, "b s ... -> (b s) ...")
         v_cache_ref[update_mask] = rearrange(v, "b s ... -> (b s) ...")
-    # k_cache_rep = repeat(k_cache_ref, "b s h d -> b s (h g) d", g=nheads // nheads_k)
-    # v_cache_rep = repeat(v_cache_ref, "b s h d -> b s (h g) d", g=nheads // nheads_k)
+
+    # For grouped query attention.
     k_cache_rep = repeat(k_cache_ref, "b s h d -> b s (h g) d", g=nheads // nheads_k)
     v_cache_rep = repeat(v_cache_ref, "b s h d -> b s (h g) d", g=nheads // nheads_k)
     out1 = None

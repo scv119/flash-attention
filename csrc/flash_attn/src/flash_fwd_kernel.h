@@ -865,7 +865,8 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
         // Need this before we can read in K again, so that we'll see the updated K values.
         __syncthreads();
         if (n_block_max > n_block_copy_min) {
-            assert(false);
+            tKgK.data() = tKgK.data() - (n_block_max - n_block_copy_min) * binfo.k_advance_offset_pg(bidb_cache, n_block, params.k_row_stride, kBlockN);
+            tKgKnew.data() = tKgKnew.data() - (n_block_max - n_block_copy_min) * binfo.k_advance_offset_pg(bidb_cache, n_block, params.v_row_stride, kBlockN);
             // tKgK.data() = tKgK.data() + (n_block_max - n_block_copy_min) * kBlockN * params.k_row_stride;
             // tVgV.data() = tVgV.data() + (n_block_max - n_block_copy_min) * kBlockN * params.v_row_stride;
         }

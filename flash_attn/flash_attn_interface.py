@@ -1136,8 +1136,8 @@ def flash_attn_with_page_attention(
     """
     #assert k_cache.stride(-1) == 1, "k_cache must have contiguous last dimension"
     #assert v_cache.stride(-1) == 1, "v_cache must have contiguous last dimension"
-    #assert cache_batch_idx is None, "cache batch idx is not supported by page attention"
-    assert k is None and v is None, "new k and v is not supported by page attention"
+    assert cache_batch_idx is None, "cache batch idx is not supported by page attention"
+    # assert k is None and v is None, "new k and v is not supported by page attention"
     maybe_contiguous = lambda x: x.contiguous() if x is not None and x.stride(-1) != 1 else x
     q, k, v = [maybe_contiguous(x) for x in (q, k, v)]
     if softmax_scale is None:
