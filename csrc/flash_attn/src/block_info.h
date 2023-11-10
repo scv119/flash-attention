@@ -20,7 +20,7 @@ struct BlockInfo {
         // Otherwise it's cu_seqlens_k[bidb], i.e., we use cu_seqlens_k to store the sequence lengths of K.
         , seqlen_k_cache(!Varlen || params.cu_seqlens_k == nullptr ? params.seqlen_k : (params.is_seqlens_k_cumulative ? params.cu_seqlens_k[bidb + 1] - sum_s_k : params.cu_seqlens_k[bidb]))
         , actual_seqlen_k(seqlen_k_cache + (params.knew_ptr == nullptr ? 0 : params.seqlen_knew))
-        , cu_pg_attn_block_tables_ptr(params.cu_pg_attn_block_tables_ptr)
+        , pg_attn_block_tables_ptr(params.pg_attn_block_tables_ptr)
         , pg_attn_block_batch_stride(params.pg_attn_block_tables_batch_stride)
         , pg_attn_cache_block_stride(params.pg_attn_cache_block_stride)
         {
@@ -44,11 +44,11 @@ struct BlockInfo {
     template <typename index_t>
     inline __device__ index_t k_offset_pg(const index_t batch_stride, const index_t row_stride, const int bidb, const int block_id, const int k_block_n) const {
         index_t original_offset = 0;
-        if (cu_pg_attn_block_tables_ptr == nullptr) {
+        if (pg_attn_block_tables_ptr == nullptr) {
             original_offset = k_offset(batch_stride, row_stride, bidb) + block_id * k_block_n * row_stride;
             return original_offset;
         }
-        auto pg_offset = cu_pg_attn_block_tables_ptr[bidb * pg_attn_block_batch_stride + block_id] * pg_attn_cache_block_stride;
+        auto pg_offset = pg_attn_block_tables_ptr[bidb * pg_attn_block_batch_stride + block_id] * pg_attn_cache_block_stride;
 
         // if (cute::thread0()) {
         //     printf("original_offset = %d, pg_offset is = %d\n", original_offset, pg_offset);
@@ -58,18 +58,18 @@ struct BlockInfo {
 
     template <typename index_t>
     inline __device__ int k_advance_offset_pg(const int bidb, const int current_block_id, const index_t row_stride, const int k_block_n) const {
-        if (cu_pg_attn_block_tables_ptr == nullptr) {
+        if (pg_attn_block_tables_ptr == nullptr) {
             return -int(k_block_n * row_stride);
         }
-        int offset = cu_pg_attn_block_tables_ptr[bidb * pg_attn_block_batch_stride + current_block_id - 1] * pg_attn_cache_block_stride - 
-             cu_pg_attn_block_tables_ptr[bidb * pg_attn_block_batch_stride + current_block_id] * pg_attn_cache_block_stride;
+        int offset = pg_attn_block_tables_ptr[bidb * pg_attn_block_batch_stride + current_block_id - 1] * pg_attn_cache_block_stride - 
+             pg_attn_block_tables_ptr[bidb * pg_attn_block_batch_stride + current_block_id] * pg_attn_cache_block_stride;
 
         // if (cute::thread0()) {
         //     int origin_offset = -int(k_block_n * row_stride);
         //     int index_prev = bidb * pg_attn_block_batch_stride + current_block_id - 1;
         //     int index_now = bidb * pg_attn_block_batch_stride + current_block_id;
         //     printf("index_prev = %d, index_now = %d, block_table_id_prev = %d, block_table_id_now = %d", 
-        //             index_prev, index_now, cu_pg_attn_block_tables_ptr[index_prev], cu_pg_attn_block_tables_ptr[index_now]);
+        //             index_prev, index_now, pg_attn_block_tables_ptr[index_prev], pg_attn_block_tables_ptr[index_now]);
         //     printf("current block_id = %d, offset is = %d, origin_offset = %d\n", current_block_id, offset, origin_offset);
         // }
         return offset;
@@ -82,9 +82,10 @@ struct BlockInfo {
     const int seqlen_k_cache;
     const int actual_seqlen_k;
     // Store the block offset for each block.
-    const int* __restrict__ cu_pg_attn_block_tables_ptr;
+    const int* __restrict__ pg_attn_block_tables_ptr;
     const int pg_attn_block_batch_stride;
     const int pg_attn_cache_block_stride;
+    const int* __restrict__ actual_batch_size;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

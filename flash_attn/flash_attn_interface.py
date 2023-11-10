@@ -1058,6 +1058,7 @@ def flash_attn_with_page_attention(
     window_size=(-1, -1),  # -1 means infinite context window
     rotary_interleaved=True,
     num_splits=0,
+    actual_batch_size: Optional[torch.Tensor] = None,
 ):
     """
     If k and v are not None, k_cache and v_cache will be updated *inplace* with the new values from
@@ -1166,6 +1167,7 @@ def flash_attn_with_page_attention(
         window_size[1],
         rotary_interleaved,
         num_splits,
+        actual_batch_size,
     )
     return out
 
@@ -1189,6 +1191,7 @@ def flash_attn_varlen_with_page_attention(
     window_size=(-1, -1),  # -1 means infinite context window
     rotary_interleaved=True,
     num_splits=0,
+    actual_batch_size: Optional[torch.Tensor] = None,
 ):
     """
     If k and v are not None, k_cache and v_cache will be updated *inplace* with the new values from
@@ -1299,5 +1302,6 @@ def flash_attn_varlen_with_page_attention(
         window_size[1],
         rotary_interleaved,
         num_splits,
+        actual_batch_size,
     )
     return out

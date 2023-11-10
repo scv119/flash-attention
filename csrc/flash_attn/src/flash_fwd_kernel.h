@@ -606,6 +606,16 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
     >;
     using ElementO = std::conditional_t<!Split, Element, ElementAccum>;
 
+    // Skip all the threads if the sequence is invalid.
+    // This is OK because all the threads in the same thread block share
+    // the same sequence.
+    if (params.actual_batch_size != nullptr) {
+       int actual_batch_size = params.actual_batch_size[0];
+        DEBUG_PRINT("actual_batch_size=%d, batch_id=%d", actual_batch_size, bidb);
+       if (bidb >= actual_batch_size) {
+        return;
+       }
+    }
     const BlockInfo</*Varlen=*/!Is_even_MN> binfo(params, bidb);
     DEBUG_PRINT("Is_even_MN = %d, Is_local=%d, is_cumulativ = %d, seqlen_k_cache = %d, actual_seqlen_k = %d\n", Is_even_MN, Is_local, params.is_seqlens_k_cumulative, binfo.seqlen_k_cache, binfo.actual_seqlen_k);
     // if (threadIdx.x == 0 && blockIdx.y == 1 && blockIdx.z == 0) { printf("params.knew_ptr = %p, seqlen_k_cache + seqlen_knew = %d\n", params.knew_ptr, binfo.seqlen_k_cache + (params.knew_ptr == nullptr ? 0 : params.seqlen_knew)); }
@@ -1343,11 +1353,20 @@ inline __device__ void combine_attn_seqk_parallel(const Params &params) {
     Tensor rO = flash::convert_type<Element>(tOrO);
     // TODO(scv119): This is messed up if q is varlen.
     // Write to gO
+    int actual_batch_size = 0;
+    if (params.actual_batch_size != nullptr) {
+       actual_batch_size = params.actual_batch_size[0];
+    }
+
     #pragma unroll
     for (int m = 0; m < size<1>(rO); ++m) {
         const int idx = bidx * kBlockM + get<0>(tOcOaccum(0, m, 0));
         if (idx < params.b * params.h * params.seqlen_q) {
             const int batch_idx = idx / (params.h * params.seqlen_q);
+
+            if (actual_batch_size > 0 && batch_idx >= actual_batch_size) {
+                continue;
+            }
             const int head_idx = (idx - batch_idx * (params.h * params.seqlen_q)) / params.seqlen_q;
             // The index to the rows of Q
             const int row = idx - batch_idx * (params.h * params.seqlen_q) - head_idx * params.seqlen_q;

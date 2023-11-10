@@ -181,6 +181,17 @@ def construct_local_mask(
         )
 
 
+def pad_query(q, pad_size):
+    return F.pad(q, (0, 0, 0, 0, 0, pad_size), "constant", 1)
+
+
+def pad_seqlens(k, pad_size):
+    print(f"{k=}")
+    padded = F.pad(k, (0, pad_size), "constant", 200)
+    print(f"{padded=}")
+    return padded
+
+
 def attention_ref(
     q,
     k,
@@ -861,6 +872,7 @@ def test_flash_attn_page(
 # @pytest.mark.parametrize('d', [32, 40, 64, 80, 96, 128, 160, 192])
 # @pytest.mark.parametrize('d', [56, 80])
 # @pytest.mark.parametrize("d", [32])
+@pytest.mark.parametrize("pad_q, pad_b", [(0, 0), (3, 4)])
 @pytest.mark.parametrize(
     "seqlen_q,seqlen_k",
     [
@@ -891,6 +903,8 @@ def test_varlen_causal_flash_attn_page(
     mha_type,
     num_splits,
     dtype,
+    pad_q,
+    pad_b,
 ):
     if seqlen_q > seqlen_k and new_kv:
         pytest.skip()
@@ -996,12 +1010,12 @@ def test_varlen_causal_flash_attn_page(
     print(f"{block_tables=}")
     print(f"{causal=}, {local=}")
     out2 = flash_attn_varlen_with_page_attention(
-        q_selected,
+        pad_query(q_selected, pad_q),
         k_cache,
         v_cache,
         block_tables,
-        cache_seqlens_q,
-        cache_seqlens_k,
+        pad_seqlens(cache_seqlens_q, pad_b),
+        pad_seqlens(cache_seqlens_k, pad_b),
         seqlen_q,
         seqlen_k,
         None,
@@ -1013,7 +1027,10 @@ def test_varlen_causal_flash_attn_page(
         window_size=window_size,
         rotary_interleaved=rotary_interleaved,
         num_splits=num_splits,
+        actual_batch_size=torch.cuda.IntTensor([batch_size]),
     )
+    if pad_q > 0:
+        out2 = out2[:-pad_q]
     torch.cuda.synchronize()
     print('=====================================')
     print("running paged attention for query[0]...")

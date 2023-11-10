@@ -1303,7 +1303,8 @@ mha_fwd_pgcache(at::Tensor &q,                 // batch_size x seqlen_q x num_he
                 const int window_size_left,
                 int window_size_right,
                 bool is_rotary_interleaved,   // if true, rotary combines indices 0 & 1, else indices 0 & rotary_dim / 2
-                int num_splits
+                int num_splits,
+                c10::optional<const at::Tensor> &actual_batch_size_
                 ) {
 
     auto dprops = at::cuda::getCurrentDeviceProperties();
@@ -1412,7 +1413,7 @@ mha_fwd_pgcache(at::Tensor &q,                 // batch_size x seqlen_q x num_he
                      window_size_right);
 
     // set block_tables_ptr
-    params.cu_pg_attn_block_tables_ptr = static_cast<int *>(block_tables.data_ptr());
+    params.pg_attn_block_tables_ptr = static_cast<int *>(block_tables.data_ptr());
     params.pg_attn_block_tables_batch_stride = block_tables.stride(0);
     params.pg_attn_cache_block_stride = kcache.stride(0);
 
@@ -1494,6 +1495,14 @@ mha_fwd_pgcache(at::Tensor &q,                 // batch_size x seqlen_q x num_he
         TORCH_CHECK(cache_batch_idx.scalar_type() == torch::kInt32, "cache_batch_idx must have dtype int32");
         params.cache_batch_idx = reinterpret_cast<int *>(cache_batch_idx.data_ptr());
     }
+
+    if (actual_batch_size_.has_value()) {
+        auto actual_batch_size = actual_batch_size_.value();
+        CHECK_DEVICE(actual_batch_size);
+        CHECK_CONTIGUOUS(actual_batch_size);
+        TORCH_CHECK(actual_batch_size.scalar_type() == torch::kInt32, "actual_batch_size must have dtype int32");
+        params.actual_batch_size = reinterpret_cast<int *>(actual_batch_size.data_ptr());
+    }
     // This needs to match with run_mha_fwd_splitkv_dispatch
     // const int block_n = head_size <= 64 ? 256 : (head_size <= 128 ? 128 : 64);
     const int block_n = 32;
@@ -1561,7 +1570,8 @@ mha_varlen_fwd_pgcache(
                 const int window_size_left,
                 int window_size_right,
                 bool is_rotary_interleaved,   // if true, rotary combines indices 0 & 1, else indices 0 & rotary_dim / 2
-                int num_splits
+                int num_splits,
+                c10::optional<const at::Tensor> &actual_batch_size_
                 ) {
 
     auto dprops = at::cuda::getCurrentDeviceProperties();
@@ -1678,7 +1688,7 @@ mha_varlen_fwd_pgcache(
                      window_size_right);
 
     // set block_tables_ptr
-    params.cu_pg_attn_block_tables_ptr = static_cast<int *>(block_tables.data_ptr());
+    params.pg_attn_block_tables_ptr = static_cast<int *>(block_tables.data_ptr());
     params.pg_attn_block_tables_batch_stride = block_tables.stride(0);
     params.pg_attn_cache_block_stride = kcache.stride(0);
 
@@ -1734,6 +1744,14 @@ mha_varlen_fwd_pgcache(
         CHECK_CONTIGUOUS(cache_batch_idx);
         TORCH_CHECK(cache_batch_idx.scalar_type() == torch::kInt32, "cache_batch_idx must have dtype int32");
         params.cache_batch_idx = reinterpret_cast<int *>(cache_batch_idx.data_ptr());
+    }
+
+    if (actual_batch_size_.has_value()) {
+        auto actual_batch_size = actual_batch_size_.value();
+        CHECK_DEVICE(actual_batch_size);
+        CHECK_CONTIGUOUS(actual_batch_size);
+        TORCH_CHECK(actual_batch_size.scalar_type() == torch::kInt32, "actual_batch_size must have dtype int32");
+        params.actual_batch_size = reinterpret_cast<int *>(actual_batch_size.data_ptr());
     }
     // This needs to match with run_mha_fwd_splitkv_dispatch
     // const int block_n = head_size <= 64 ? 256 : (head_size <= 128 ? 128 : 64);
