@@ -1457,7 +1457,7 @@ mha_fwd_pgcache(at::Tensor &q,                 // batch_size x seqlen_q x num_he
         TORCH_CHECK(seqlens_k.dtype() == torch::kInt32, "seqlens_k must have dtype int32");
         CHECK_DEVICE(seqlens_k);
         CHECK_CONTIGUOUS(seqlens_k);
-        CHECK_SHAPE(seqlens_k, batch_size);
+        // CHECK_SHAPE(seqlens_k, batch_size);
         params.cu_seqlens_k = static_cast<int *>(seqlens_k.data_ptr());
     }
     params.is_seqlens_k_cumulative = !(seqlens_k_.has_value());

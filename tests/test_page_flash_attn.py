@@ -187,7 +187,7 @@ def pad_query(q, pad_size):
 
 def pad_seqlens(k, pad_size):
     print(f"{k=}")
-    padded = F.pad(k, (0, pad_size), "constant", 200)
+    padded = F.pad(k, (0, pad_size), "constant", 1000)
     print(f"{padded=}")
     return padded
 
