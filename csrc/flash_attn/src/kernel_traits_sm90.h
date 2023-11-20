@@ -24,7 +24,7 @@ struct Flash_kernel_traits_sm90 {
 #endif
 
     using ElementAccum = float;
-    using index_t = uint64_t;
+    using index_t = uint32_t;
 
 #if defined(__CUDA_ARCH__) &&  __CUDA_ARCH__ >= 800
     using MMA_Atom_Arch = std::conditional_t<

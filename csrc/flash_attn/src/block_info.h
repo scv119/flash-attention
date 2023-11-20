@@ -42,13 +42,13 @@ struct BlockInfo {
     }
 
     template <typename index_t>
-    inline __device__ index_t k_offset_pg(const index_t batch_stride, const index_t row_stride, const int bidb, const int block_id, const int k_block_n) const {
+    inline __device__ int64_t k_offset_pg(const index_t batch_stride, const index_t row_stride, const int bidb, const int block_id, const int k_block_n) const {
         index_t original_offset = 0;
         if (pg_attn_block_tables_ptr == nullptr) {
             original_offset = k_offset(batch_stride, row_stride, bidb) + block_id * k_block_n * row_stride;
             return original_offset;
         }
-        auto pg_offset = int64_t(pg_attn_block_tables_ptr[bidb * pg_attn_block_batch_stride + block_id]) * pg_attn_cache_block_stride;
+        int64_t pg_offset = int64_t(pg_attn_block_tables_ptr[bidb * pg_attn_block_batch_stride + block_id]) * pg_attn_cache_block_stride;
 
         // if (cute::thread0()) {
         //     printf("original_offset = %d, pg_offset is = %d\n", original_offset, pg_offset);
