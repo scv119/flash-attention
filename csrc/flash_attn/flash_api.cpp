@@ -1509,8 +1509,9 @@ mha_fwd_pgcache(at::Tensor &q,                 // batch_size x seqlen_q x num_he
     }
     // This needs to match with run_mha_fwd_splitkv_dispatch
     // const int block_n = head_size <= 64 ? 256 : (head_size <= 128 ? 128 : 64);
-    const int block_n = 32;
-    TORCH_CHECK(block_size == block_n, "block_size must be equal to block_n");
+    const int block_n_candidate = head_size <= 64 ? 256 : (head_size <= 128 ? 128 : 64);
+    const int block_n = block_n_candidate > block_size ? block_size : block_n_candidate;
+    TORCH_CHECK(block_size % block_n == 0 && block_size >= 32, "block_size must be dividable by block_n");
     const int num_n_blocks = (seqlen_k + block_n - 1) / block_n;
     // Technically kBlockM = 64 only for the splitKV kernels, not the standard kernel.
     // In any case we don't expect seqlen_q to be larger than 64 for inference.
