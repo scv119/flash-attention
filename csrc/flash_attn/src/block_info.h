@@ -44,7 +44,14 @@ struct BlockInfo {
 
     inline __device__ int64_t pg_attn_block_offset(const int bidb, const int block_id, const int k_block_n) const {
         const int num_per_pg_block = pg_attn_block_size / k_block_n;
-        return int64_t(pg_attn_block_tables_ptr[bidb * pg_attn_block_batch_stride + block_id / num_per_pg_block]) * pg_attn_cache_block_stride
+        const int pg_block_id = bidb * pg_attn_block_batch_stride + block_id / num_per_pg_block;
+
+        if (pg_block_id != cached_pg_block_id) {
+            cached_pg_block_id = pg_block_id;
+            cached_pg_offset = int64_t(pg_attn_block_tables_ptr[bidb * pg_attn_block_batch_stride + block_id / num_per_pg_block]);
+        }
+        // TODO: cache this value to avoid repeated lookup.
+        return cached_pg_offset * pg_attn_cache_block_stride
             + block_id % num_per_pg_block * (pg_attn_cache_block_stride / num_per_pg_block);
     }
 
@@ -96,6 +103,8 @@ struct BlockInfo {
     const int pg_attn_cache_block_stride;
     const int* __restrict__ actual_batch_size;
     const int pg_attn_block_size;
+    mutable int cached_pg_block_id = -1;
+    mutable int64_t cached_pg_offset = 0;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
