@@ -65,7 +65,6 @@
     }                                      \
   }()
 
-
 #define FWD_PAGE_BLOCK_SWITCH(PG_BLOCK, ...)   \
   [&] {                                    \
     if (PG_BLOCK == 0 ) {                   \
