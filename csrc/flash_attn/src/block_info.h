@@ -42,9 +42,8 @@ struct BlockInfo {
         return sum_s_k == -1 ? bidb * batch_stride : uint32_t(sum_s_k) * row_stride;
     }
 
-    template <typename index_t>
     inline __device__ int64_t pg_attn_block_offset(const int bidb, const int block_id, const int k_block_n) const {
-        constexpr int num_per_pg_block = pg_attn_block_size / k_block_n;
+        const int num_per_pg_block = pg_attn_block_size / k_block_n;
         return int64_t(pg_attn_block_tables_ptr[bidb * pg_attn_block_batch_stride + block_id / num_per_pg_block]) * pg_attn_cache_block_stride
             + block_id % num_per_pg_block * (pg_attn_cache_block_stride / num_per_pg_block);
     }

@@ -64,3 +64,30 @@
       return __VA_ARGS__();                \
     }                                      \
   }()
+
+
+#define FWD_PAGE_BLOCK_SWITCH(PG_BLOCK, ...)   \
+  [&] {                                    \
+    if (PG_BLOCK == 0 ) {                   \
+      constexpr static int kPageBlockSize = 0;  \
+      return __VA_ARGS__();                \
+    } else if (PG_BLOCK <= 32) {           \
+      constexpr static int kPageBlockSize = 32;  \
+      return __VA_ARGS__();                \
+    } else if (PG_BLOCK <= 64) {            \
+      constexpr static int kPageBlockSize = 64;  \
+      return __VA_ARGS__();                \
+    } else if (PG_BLOCK <= 128) {           \
+      constexpr static int kPageBlockSize = 128; \
+      return __VA_ARGS__();                \
+    } else if (PG_BLOCK <= 256) {           \
+      constexpr static int kPageBlockSize = 256; \
+      return __VA_ARGS__();                \
+    } else if (PG_BLOCK <= 512) {           \
+      constexpr static int kPageBlockSize = 512; \
+      return __VA_ARGS__();                \
+    } else if (PG_BLOCK <= 1024) {           \
+      constexpr static int kPageBlockSize = 1024; \
+      return __VA_ARGS__();                \
+    }                                      \
+  }()

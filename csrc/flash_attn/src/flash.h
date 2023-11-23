@@ -132,7 +132,7 @@ struct Flash_fwd_params : public Qkv_params {
     int *__restrict__ pg_attn_block_tables_ptr = nullptr;
     index_t pg_attn_block_tables_batch_stride;
     index_t pg_attn_cache_block_stride;
-    int pg_attn_block_size = 32;
+    int pg_attn_block_size = 0;
 
     // The actual batch size
     int *__restrict__ actual_batch_size = nullptr;
@@ -183,3 +183,5 @@ template<typename T, int Headdim> void run_mha_fwd_(Flash_fwd_params &params, cu
 template<typename T, int Headdim> void run_mha_fwd_splitkv_dispatch(Flash_fwd_params &params, cudaStream_t stream);
 
 template<typename T, int Headdim> void run_mha_bwd_(Flash_bwd_params &params, cudaStream_t stream, const bool configure);
+
+template<typename T, int Headdim, int PageBlockSize> void run_mha_fwd_splitkv_dispatch_page(Flash_fwd_params &params, cudaStream_t stream);
