@@ -23,6 +23,7 @@ struct BlockInfo {
         , pg_attn_block_tables_ptr(params.pg_attn_block_tables_ptr)
         , pg_attn_block_batch_stride(params.pg_attn_block_tables_batch_stride)
         , pg_attn_cache_block_stride(params.pg_attn_cache_block_stride)
+        , pg_attn_block_size(params.pg_attn_block_size)
         {
             // if (cute::thread0()) {
             //     printf(
@@ -42,13 +43,21 @@ struct BlockInfo {
     }
 
     template <typename index_t>
+    inline __device__ int64_t pg_attn_block_offset(const int bidb, const int block_id, const int k_block_n) const {
+        constexpr int num_per_pg_block = pg_attn_block_size / k_block_n;
+        return int64_t(pg_attn_block_tables_ptr[bidb * pg_attn_block_batch_stride + block_id / num_per_pg_block]) * pg_attn_cache_block_stride
+            + block_id % num_per_pg_block * (pg_attn_cache_block_stride / num_per_pg_block);
+    }
+
+    template <typename index_t>
     inline __device__ int64_t k_offset_pg(const index_t batch_stride, const index_t row_stride, const int bidb, const int block_id, const int k_block_n) const {
         index_t original_offset = 0;
         if (pg_attn_block_tables_ptr == nullptr) {
             original_offset = k_offset(batch_stride, row_stride, bidb) + block_id * k_block_n * row_stride;
             return original_offset;
         }
-        int64_t pg_offset = int64_t(pg_attn_block_tables_ptr[bidb * pg_attn_block_batch_stride + block_id]) * pg_attn_cache_block_stride;
+        // int64_t pg_offset = int64_t(pg_attn_block_tables_ptr[bidb * pg_attn_block_batch_stride + block_id]) * pg_attn_cache_block_stride;
+        int64_t pg_offset = pg_attn_block_offset(bidb, block_id, k_block_n);
 
         // if (cute::thread0()) {
         //     printf("original_offset = %d, pg_offset is = %d\n", original_offset, pg_offset);
@@ -61,8 +70,9 @@ struct BlockInfo {
         if (pg_attn_block_tables_ptr == nullptr) {
             return -int64_t(k_block_n * row_stride);
         }
-        int64_t offset = int64_t(pg_attn_block_tables_ptr[bidb * pg_attn_block_batch_stride + current_block_id - 1]) * pg_attn_cache_block_stride - 
-             int64_t(pg_attn_block_tables_ptr[bidb * pg_attn_block_batch_stride + current_block_id]) * pg_attn_cache_block_stride;
+        // int64_t offset = int64_t(pg_attn_block_tables_ptr[bidb * pg_attn_block_batch_stride + current_block_id - 1]) * pg_attn_cache_block_stride - 
+            //  int64_t(pg_attn_block_tables_ptr[bidb * pg_attn_block_batch_stride + current_block_id]) * pg_attn_cache_block_stride;
+        int64_t offset = pg_attn_block_offset(bidb, current_block_id - 1, k_block_n) - pg_attn_block_offset(bidb, current_block_id, k_block_n);
 
         // if (cute::thread0()) {
         //     int origin_offset = -int(k_block_n * row_stride);
@@ -86,6 +96,7 @@ struct BlockInfo {
     const int pg_attn_block_batch_stride;
     const int pg_attn_cache_block_stride;
     const int* __restrict__ actual_batch_size;
+    const int pg_attn_block_size;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

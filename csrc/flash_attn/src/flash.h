@@ -132,6 +132,7 @@ struct Flash_fwd_params : public Qkv_params {
     int *__restrict__ pg_attn_block_tables_ptr = nullptr;
     index_t pg_attn_block_tables_batch_stride;
     index_t pg_attn_cache_block_stride;
+    int pg_attn_block_size = 32;
 
     // The actual batch size
     int *__restrict__ actual_batch_size = nullptr;
