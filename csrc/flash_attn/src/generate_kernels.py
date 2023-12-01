@@ -78,7 +78,7 @@ class Kernel:
         if self.block_size == -1:
             return f"flash_{self.direction}_hdim{self.head_dim}_{self.dtype}_sm{self.sm}.cu"
         else:
-            return f"flash_{self.direction}_hdim{self.head_dim}_block_{self.block_size}_{self.dtype}_sm{self.sm}.cu"
+            return f"flash_{self.direction}_hdim{self.head_dim}_block{self.block_size}_{self.dtype}_sm{self.sm}.cu"
 
 
 def get_all_kernels() -> List[Kernel]:
