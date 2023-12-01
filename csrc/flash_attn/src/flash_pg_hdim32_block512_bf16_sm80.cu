@@ -5,5 +5,3 @@
 #include "flash_fwd_launch_template.h"
 
 template void run_mha_fwd_splitkv_dispatch_page<cutlass::bfloat16_t, 32, 512>(Flash_fwd_params &params, cudaStream_t stream);
-
-template void run_mha_fwd_splitkv_dispatch_page<cutlass::half_t, 32, 512>(Flash_fwd_params &params, cudaStream_t stream);

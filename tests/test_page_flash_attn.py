@@ -564,7 +564,7 @@ def get_dropout_fraction(
 # @pytest.mark.parametrize('d', [32, 48, 64, 80, 96, 128, 160, 192, 224, 256])
 # @pytest.mark.parametrize('d', [32, 40, 64, 80, 96, 128, 160, 192])
 # @pytest.mark.parametrize('d', [56, 80])
-@pytest.mark.parametrize("d", [128])
+@pytest.mark.parametrize("d", [32, 64, 128, 256])
 @pytest.mark.parametrize("block_size", [32, 64, 128, 256, 512, 1024])
 @pytest.mark.parametrize(
     "seqlen_q,seqlen_k",
@@ -873,7 +873,7 @@ def test_flash_attn_page(
 # @pytest.mark.parametrize('d', [32, 48, 64, 80, 96, 128, 160, 192, 224, 256])
 # @pytest.mark.parametrize('d', [32, 40, 64, 80, 96, 128, 160, 192])
 # @pytest.mark.parametrize('d', [56, 80])
-@pytest.mark.parametrize("d", [128])
+@pytest.mark.parametrize("d", [32, 64, 128, 256])
 @pytest.mark.parametrize("block_size", [32, 64, 128, 256, 512, 1024])
 @pytest.mark.parametrize("pad_q, pad_b", [(0, 0), (3, 4)])
 @pytest.mark.parametrize(

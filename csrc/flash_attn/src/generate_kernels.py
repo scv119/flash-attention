@@ -40,9 +40,7 @@ void run_mha_bwd_<{DTYPE}, {HEAD_DIM}>(Flash_bwd_params &params, cudaStream_t st
 
 KERNEL_IMPL_TEMPLATE_PAGE = """#include "flash_fwd_launch_template.h"
 
-template void run_mha_fwd_splitkv_dispatch_page<cutlass::bfloat16_t, {HEAD_DIM}, {BLOCK_SIZE}>(Flash_fwd_params &params, cudaStream_t stream);
-
-template void run_mha_fwd_splitkv_dispatch_page<cutlass::half_t, {HEAD_DIM}, {BLOCK_SIZE}>(Flash_fwd_params &params, cudaStream_t stream);
+template void run_mha_fwd_splitkv_dispatch_page<{DTYPE}, {HEAD_DIM}, {BLOCK_SIZE}>(Flash_fwd_params &params, cudaStream_t stream);
 """
 
 
@@ -70,7 +68,7 @@ class Kernel:
             )
         else:
             return KERNEL_IMPL_TEMPLATE_PAGE.format(
-                HEAD_DIM=self.head_dim, BLOCK_SIZE=self.block_size
+                DTYPE=DTYPE_MAP[self.dtype], HEAD_DIM=self.head_dim, BLOCK_SIZE=self.block_size
             )
 
     @property
