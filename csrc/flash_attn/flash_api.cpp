@@ -600,16 +600,8 @@ void run_mha_bwd(Flash_bwd_params &params, cudaStream_t stream, const bool confi
             run_mha_bwd_<elem_type, 32>(params, stream, configure);
         } else if (params.d <= 64) {
             run_mha_bwd_<elem_type, 64>(params, stream, configure);
-        } else if (params.d <= 96) {
-            run_mha_bwd_<elem_type, 96>(params, stream, configure);
         } else if (params.d <= 128) {
             run_mha_bwd_<elem_type, 128>(params, stream, configure);
-        } else if (params.d <= 160) {
-            run_mha_bwd_<elem_type, 160>(params, stream, configure);
-        } else if (params.d <= 192) {
-            run_mha_bwd_<elem_type, 192>(params, stream, configure);
-        } else if (params.d <= 224) {
-          run_mha_bwd_<elem_type, 224>(params, stream, configure);
         } else if (params.d <= 256) {
           run_mha_bwd_<elem_type, 256>(params, stream, configure);
         }
