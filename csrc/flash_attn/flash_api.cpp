@@ -199,11 +199,15 @@ void set_params_dgrad(Flash_bwd_params &params,
 void run_mha_fwd(Flash_fwd_params &params, cudaStream_t stream, bool force_split_kernel=false) {
     FP16_SWITCH(!params.is_bf16, [&] {
         FWD_HEADDIM_SWITCH(params.d, [&] {
-            if (params.num_splits <= 1 && !force_split_kernel) {  // If we don't set it num_splits == 0
-                run_mha_fwd_<elem_type, kHeadDim>(params, stream);
-            } else {
-                run_mha_fwd_splitkv_dispatch<elem_type, kHeadDim>(params, stream);
-            }
+                FWD_PAGE_BLOCK_SWITCH(params.pg_attn_block_size, [&] {
+                    if (params.num_splits <= 1 && !force_split_kernel) {  // If we don't set it num_splits == 0
+                        run_mha_fwd_<elem_type, kHeadDim>(params, stream);
+                    } else if (params.pg_attn_block_size == 0) {
+                        run_mha_fwd_splitkv_dispatch<elem_type, kHeadDim>(params, stream);
+                    } else {
+                        run_mha_fwd_splitkv_dispatch_page<elem_type, kHeadDim, kPageBlockSize>(params, stream);
+                    }
+                });
         });
     });
 }
@@ -596,16 +600,8 @@ void run_mha_bwd(Flash_bwd_params &params, cudaStream_t stream, const bool confi
             run_mha_bwd_<elem_type, 32>(params, stream, configure);
         } else if (params.d <= 64) {
             run_mha_bwd_<elem_type, 64>(params, stream, configure);
-        } else if (params.d <= 96) {
-            run_mha_bwd_<elem_type, 96>(params, stream, configure);
         } else if (params.d <= 128) {
             run_mha_bwd_<elem_type, 128>(params, stream, configure);
-        } else if (params.d <= 160) {
-            run_mha_bwd_<elem_type, 160>(params, stream, configure);
-        } else if (params.d <= 192) {
-            run_mha_bwd_<elem_type, 192>(params, stream, configure);
-        } else if (params.d <= 224) {
-          run_mha_bwd_<elem_type, 224>(params, stream, configure);
         } else if (params.d <= 256) {
           run_mha_bwd_<elem_type, 256>(params, stream, configure);
         }
@@ -1415,6 +1411,7 @@ mha_fwd_pgcache(at::Tensor &q,                 // batch_size x seqlen_q x num_he
     params.pg_attn_block_tables_ptr = static_cast<int *>(block_tables.data_ptr());
     params.pg_attn_block_tables_batch_stride = block_tables.stride(0);
     params.pg_attn_cache_block_stride = kcache.stride(0);
+    params.pg_attn_block_size = block_size;
 
     at::Tensor k, v, k_padded, v_padded;
     if (k_.has_value()) {
@@ -1504,8 +1501,9 @@ mha_fwd_pgcache(at::Tensor &q,                 // batch_size x seqlen_q x num_he
     }
     // This needs to match with run_mha_fwd_splitkv_dispatch
     // const int block_n = head_size <= 64 ? 256 : (head_size <= 128 ? 128 : 64);
-    const int block_n = 32;
-    TORCH_CHECK(block_size == block_n, "block_size must be equal to block_n");
+    const int block_n_candidate = head_size <= 64 ? 256 : (head_size <= 128 ? 128 : 64);
+    const int block_n = block_n_candidate > block_size ? block_size : block_n_candidate;
+    TORCH_CHECK(block_size % block_n == 0 && block_size >= 32, "block_size must be dividable by block_n");
     const int num_n_blocks = (seqlen_k + block_n - 1) / block_n;
     // Technically kBlockM = 64 only for the splitKV kernels, not the standard kernel.
     // In any case we don't expect seqlen_q to be larger than 64 for inference.
@@ -1690,6 +1688,7 @@ mha_varlen_fwd_pgcache(
     params.pg_attn_block_tables_ptr = static_cast<int *>(block_tables.data_ptr());
     params.pg_attn_block_tables_batch_stride = block_tables.stride(0);
     params.pg_attn_cache_block_stride = kcache.stride(0);
+    params.pg_attn_block_size = block_size;
 
     TORCH_CHECK(!k_.has_value(), "append k/v is not supported yet.");
     // at::Tensor k, v, k_padded, v_padded;
@@ -1753,9 +1752,9 @@ mha_varlen_fwd_pgcache(
         params.actual_batch_size = reinterpret_cast<int *>(actual_batch_size.data_ptr());
     }
     // This needs to match with run_mha_fwd_splitkv_dispatch
-    // const int block_n = head_size <= 64 ? 256 : (head_size <= 128 ? 128 : 64);
-    const int block_n = 32;
-    TORCH_CHECK(block_size == block_n, "block_size must be equal to block_n");
+    const int block_n_candidate = head_size <= 64 ? 256 : (head_size <= 128 ? 128 : 64);
+    const int block_n = block_n_candidate > block_size ? block_size : block_n_candidate;
+    TORCH_CHECK(block_size % block_n == 0 && block_size >= 32, "block_size must be dividable by block_n");
     const int num_n_blocks = (max_seqlen_k + block_n - 1) / block_n;
     // Technically kBlockM = 64 only for the splitKV kernels, not the standard kernel.
     // In any case we don't expect seqlen_q to be larger than 64 for inference.

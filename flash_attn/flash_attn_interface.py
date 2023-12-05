@@ -1059,6 +1059,7 @@ def flash_attn_with_page_attention(
     rotary_interleaved=True,
     num_splits=0,
     actual_batch_size: Optional[torch.Tensor] = None,
+    out_: Optional[torch.Tensor] = None,
 ):
     """
     If k and v are not None, k_cache and v_cache will be updated *inplace* with the new values from
@@ -1160,7 +1161,7 @@ def flash_attn_with_page_attention(
         rotary_cos,
         rotary_sin,
         cache_batch_idx,
-        None,
+        out_,
         softmax_scale,
         causal,
         window_size[0],
@@ -1192,6 +1193,7 @@ def flash_attn_varlen_with_page_attention(
     rotary_interleaved=True,
     num_splits=0,
     actual_batch_size: Optional[torch.Tensor] = None,
+    out_: Optional[torch.Tensor] = None,
 ):
     """
     If k and v are not None, k_cache and v_cache will be updated *inplace* with the new values from
@@ -1295,7 +1297,7 @@ def flash_attn_varlen_with_page_attention(
         rotary_cos,
         rotary_sin,
         cache_batch_idx,
-        None,
+        out_,
         softmax_scale,
         causal,
         window_size[0],

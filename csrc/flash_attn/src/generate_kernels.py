@@ -15,7 +15,8 @@ DTYPE_MAP = {
 }
 
 SM = [80]  # Sm80 kernels support up to
-HEAD_DIMENSIONS = [32, 64, 96, 128, 160, 192, 224, 256]
+HEAD_DIMENSIONS = [32, 64, 128, 256]
+PG_BLOCK_SIZE = [32, 64, 128, 256, 512, 1024]
 KERNEL_IMPL_TEMPLATE_FWD = """#include "flash_fwd_launch_template.h"
 
 template<>
@@ -37,6 +38,11 @@ void run_mha_bwd_<{DTYPE}, {HEAD_DIM}>(Flash_bwd_params &params, cudaStream_t st
 }}
 """
 
+KERNEL_IMPL_TEMPLATE_PAGE = """#include "flash_fwd_launch_template.h"
+
+template void run_mha_fwd_splitkv_dispatch_page<{DTYPE}, {HEAD_DIM}, {BLOCK_SIZE}>(Flash_fwd_params &params, cudaStream_t stream);
+"""
+
 
 @dataclass
 class Kernel:
@@ -44,6 +50,7 @@ class Kernel:
     dtype: str
     head_dim: int
     direction: str
+    block_size: int=-1
 
     @property
     def template(self) -> str:
@@ -55,20 +62,29 @@ class Kernel:
             return KERNEL_IMPL_TEMPLATE_BWD.format(
                 DTYPE=DTYPE_MAP[self.dtype], HEAD_DIM=self.head_dim
             )
-        else:
+        elif self.direction == "fwd_split":
             return KERNEL_IMPL_TEMPLATE_FWD_SPLIT.format(
                 DTYPE=DTYPE_MAP[self.dtype], HEAD_DIM=self.head_dim
+            )
+        else:
+            return KERNEL_IMPL_TEMPLATE_PAGE.format(
+                DTYPE=DTYPE_MAP[self.dtype], HEAD_DIM=self.head_dim, BLOCK_SIZE=self.block_size
             )
 
     @property
     def filename(self) -> str:
-        return f"flash_{self.direction}_hdim{self.head_dim}_{self.dtype}_sm{self.sm}.cu"
+        if self.block_size == -1:
+            return f"flash_{self.direction}_hdim{self.head_dim}_{self.dtype}_sm{self.sm}.cu"
+        else:
+            return f"flash_{self.direction}_hdim{self.head_dim}_block{self.block_size}_{self.dtype}_sm{self.sm}.cu"
 
 
 def get_all_kernels() -> List[Kernel]:
     for dtype, head_dim, sm in itertools.product(DTYPE_MAP.keys(), HEAD_DIMENSIONS, SM):
         for direction in ["fwd", "bwd", "fwd_split"]:
             yield Kernel(sm=sm, dtype=dtype, head_dim=head_dim, direction=direction)
+        for block_size in PG_BLOCK_SIZE:
+            yield Kernel(sm=sm, dtype=dtype, head_dim=head_dim, direction="pg", block_size=block_size)
 
 
 def write_kernel(kernel: Kernel, autogen_dir: Path) -> None:

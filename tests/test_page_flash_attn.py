@@ -561,10 +561,11 @@ def get_dropout_fraction(
 @pytest.mark.parametrize("varlen", [False])
 # @pytest.mark.parametrize("d", [32, 59, 64, 80, 96, 128, 160, 192, 224, 256])
 # @pytest.mark.parametrize('d', [32, 64, 96, 128, 160, 192, 224, 256])
-@pytest.mark.parametrize('d', [32, 48, 64, 80, 96, 128, 160, 192, 224, 256])
+# @pytest.mark.parametrize('d', [32, 48, 64, 80, 96, 128, 160, 192, 224, 256])
 # @pytest.mark.parametrize('d', [32, 40, 64, 80, 96, 128, 160, 192])
 # @pytest.mark.parametrize('d', [56, 80])
-# @pytest.mark.parametrize("d", [32])
+@pytest.mark.parametrize("d", [32, 64, 128, 256])
+@pytest.mark.parametrize("block_size", [32, 64, 128, 256, 512, 1024])
 @pytest.mark.parametrize(
     "seqlen_q,seqlen_k",
     [
@@ -597,6 +598,7 @@ def test_flash_attn_page(
     mha_type,
     num_splits,
     dtype,
+    block_size,
 ):
     if seqlen_q > seqlen_k and new_kv:
         pytest.skip()
@@ -606,7 +608,7 @@ def test_flash_attn_page(
     # set seed
     torch.random.manual_seed(0)
 
-    page_block_size = 32
+    page_block_size = block_size
     num_pages = 10
     batch_size = 15
     max_page_len = (seqlen_k - 1) // page_block_size + 1
@@ -868,10 +870,11 @@ def test_flash_attn_page(
 @pytest.mark.parametrize("has_batch_idx", [False])
 # @pytest.mark.parametrize("d", [32, 59, 64, 80, 96, 128, 160, 192, 224, 256])
 #@pytest.mark.parametrize('d', [32, 64, 96, 128, 160, 192, 224, 256])
-@pytest.mark.parametrize('d', [32, 48, 64, 80, 96, 128, 160, 192, 224, 256])
+# @pytest.mark.parametrize('d', [32, 48, 64, 80, 96, 128, 160, 192, 224, 256])
 # @pytest.mark.parametrize('d', [32, 40, 64, 80, 96, 128, 160, 192])
 # @pytest.mark.parametrize('d', [56, 80])
-# @pytest.mark.parametrize("d", [32])
+@pytest.mark.parametrize("d", [32, 64, 128, 256])
+@pytest.mark.parametrize("block_size", [32, 64, 128, 256, 512, 1024])
 @pytest.mark.parametrize("pad_q, pad_b", [(0, 0), (3, 4)])
 @pytest.mark.parametrize(
     "seqlen_q,seqlen_k",
@@ -905,6 +908,7 @@ def test_varlen_causal_flash_attn_page(
     dtype,
     pad_q,
     pad_b,
+    block_size,
 ):
     if seqlen_q > seqlen_k and new_kv:
         pytest.skip()
@@ -914,7 +918,7 @@ def test_varlen_causal_flash_attn_page(
     # set seed
     torch.random.manual_seed(0)
 
-    page_block_size = 32
+    page_block_size = block_size
     num_pages = 10
     batch_size = 2
     max_page_len = (seqlen_k - 1) // page_block_size + 1
